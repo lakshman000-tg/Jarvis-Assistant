@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --color-jarvis-cyan: #00ffff;
+  --color-jarvis-cyan-dark: #008b8b;
+  --color-jarvis-navy: #0b0f1a;
+  --color-jarvis-dark: #001a26;
+  --color-jarvis-panel: rgba(0, 26, 38, 0.7);
+
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
+
+  --animate-pulse-glow: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-scanline: scanline 8s linear infinite;
+  --animate-spin-slow: spin 4s linear infinite;
+  --animate-spin-reverse: spin-reverse 6s linear infinite;
+}
+
+:root {
+  --background: 225 41% 7%; /* #0b0f1a */
+  --foreground: 180 100% 50%; /* #00ffff */
+  --card: 200 100% 7%; /* #001a26 */
+  --card-foreground: 180 100% 50%;
+  --border: 180 100% 20%;
+  --input: 180 100% 20%;
+  --ring: 180 100% 50%;
+  --primary: 180 100% 50%;
+  --primary-foreground: 225 41% 7%;
+  --muted: 200 100% 12%;
+  --muted-foreground: 180 100% 35%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 210 40% 98%;
+}
+
+@layer base {
+  body {
+    @apply bg-jarvis-navy text-jarvis-cyan font-body antialiased selection:bg-jarvis-cyan selection:text-jarvis-navy overflow-hidden;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-wider;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 15px 2px rgba(0, 255, 255, 0.4);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 35px 8px rgba(0, 255, 255, 0.8);
+    opacity: 0.8;
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.hud-clip {
+  clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+}
+
+.hud-clip-reverse {
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+}
+
+.scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0) 50%,
+    rgba(0, 255, 255, 0.05) 50%,
+    rgba(0, 255, 255, 0.05)
+  );
+  background-size: 100% 4px;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* Custom Scrollbar for HUD */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 26, 38, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 255, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 255, 0.6);
+}

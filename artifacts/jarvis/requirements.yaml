@@ -1,0 +1,14 @@
+packages:
+  "framer-motion": "For fluid sci-fi HUD animations and chat bubble transitions"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes safely"
+
+images:
+  - path: "artifacts/jarvis/public/images/jarvis-core.png"
+    description: "Glowing cyan holographic AI core interface centered on a deep dark space background, highly detailed tech HUD, sci-fi"
+    aspect_ratio: "16:9"
+
+notes:
+  - Using generated Orval hooks from @workspace/api-client-react for data fetching.
+  - Streaming SSE manually handled using fetch since Orval does not natively generate hooks for text/event-stream.
+  - Using Web Speech API for TTS and STT as an immediate browser-native fallback for the sci-fi assistant experience.
