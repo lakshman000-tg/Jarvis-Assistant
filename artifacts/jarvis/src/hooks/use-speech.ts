@@ -51,6 +51,7 @@ export function useSpeech(onResult: (text: string) => void) {
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRunningRef = useRef(false); // true while a session is alive
+  const focusCleanupRef = useRef<(() => void) | null>(null); // cleanup for window focus listener
   const onResultRef = useRef(onResult);
   const wakeListenRef = useRef<() => void>(() => {});
 
@@ -285,6 +286,9 @@ export function useSpeech(onResult: (text: string) => void) {
     modeRef.current = 'off';
     setMode('off');
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    // Remove focus listener
+    focusCleanupRef.current?.();
+    focusCleanupRef.current = null;
     if (isNative) {
       stopNativeListening();
     } else {
@@ -314,7 +318,9 @@ export function useSpeech(onResult: (text: string) => void) {
         }
       }, 2000);
 
-      // ── Focus listener: restart when the main page regains focus from the iframe ──
+      // ── Focus listener: restart when the main page regains focus from an iframe ──
+      // Remove any previous focus listener before adding a new one
+      focusCleanupRef.current?.();
       const onFocus = () => {
         if (modeRef.current === 'wakeWord' && !recognitionRunningRef.current) {
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
@@ -322,9 +328,7 @@ export function useSpeech(onResult: (text: string) => void) {
         }
       };
       window.addEventListener('focus', onFocus);
-      // Store cleanup on the ref so stopListening can remove it
-      (startWakeMode as any)._focusCleanup?.();
-      (startWakeMode as any)._focusCleanup = () => window.removeEventListener('focus', onFocus);
+      focusCleanupRef.current = () => window.removeEventListener('focus', onFocus);
     }
   }, [isNative, startNativeWakeListening, startWebWakeListening, updateStatus]);
 
@@ -346,6 +350,16 @@ export function useSpeech(onResult: (text: string) => void) {
   const speak = useCallback(async (text: string, callback?: () => void) => {
     if (!text) { callback?.(); return; }
     updateStatus('speaking');
+
+    // Stop recognition during TTS to prevent the mic from picking up
+    // JARVIS's own voice and creating an echo / command loop.
+    if (!isNative) {
+      if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+      try { recognitionRef.current?.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+      recognitionRunningRef.current = false;
+    }
+
     try {
       const res = await fetch('/api/openai/tts', {
         method: 'POST',
@@ -362,6 +376,12 @@ export function useSpeech(onResult: (text: string) => void) {
         audioRef.current = null;
         updateStatus(modeRef.current === 'wakeWord' ? 'listeningForWake' : 'idle');
         callback?.();
+        // Restart recognition after TTS so the mic is live again
+        if (!isNative && modeRef.current === 'wakeWord') {
+          restartTimerRef.current = setTimeout(() => {
+            if (modeRef.current === 'wakeWord') wakeListenRef.current();
+          }, 300);
+        }
       };
       audio.onended = cleanup;
       audio.onerror = cleanup;
@@ -369,9 +389,15 @@ export function useSpeech(onResult: (text: string) => void) {
     } catch (err) {
       console.error('TTS error:', err);
       updateStatus(modeRef.current === 'wakeWord' ? 'listeningForWake' : 'idle');
+      // Restart recognition even on TTS error
+      if (!isNative && modeRef.current === 'wakeWord') {
+        restartTimerRef.current = setTimeout(() => {
+          if (modeRef.current === 'wakeWord') wakeListenRef.current();
+        }, 300);
+      }
       callback?.();
     }
-  }, [updateStatus]);
+  }, [updateStatus, isNative]);
 
   // Support check on mount
   useEffect(() => {
@@ -382,6 +408,9 @@ export function useSpeech(onResult: (text: string) => void) {
     return () => {
       modeRef.current = 'off';
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      focusCleanupRef.current?.();
+      focusCleanupRef.current = null;
       if (isNative) stopNativeListening();
       else stopWebRecognition();
       if (audioRef.current) audioRef.current.pause();

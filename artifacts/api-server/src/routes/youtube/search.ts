@@ -14,7 +14,7 @@ router.get("/search", async (req, res) => {
   try {
     const exclude = String(req.query.exclude ?? "").trim();
     const results = await ytsr(query, { limit: 10 });
-    const video = results.items.find(
+    const video = (results.items as any[]).find(
       (item: any) => item.type === "video" && item.id && item.title && item.id !== exclude
     );
 

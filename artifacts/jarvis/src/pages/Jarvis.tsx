@@ -184,7 +184,7 @@ export function Jarvis() {
   // Init conversation + auto-start if configured
   useEffect(() => {
     createConv({ data: { title: "JARVIS Session" } })
-      .then((res) => {
+      .then((res: any) => {
         setConvId(res.id);
         setIsSystemOnline(true);
         addMessage("system", 'System online. JARVIS is ready. Say "Hey JARVIS" or type a command.');
