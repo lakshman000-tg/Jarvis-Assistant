@@ -18,6 +18,7 @@ export interface CommandProcessorCallbacks {
   lockApp: () => void;
   logout: () => void;
   showHelp: () => void;
+  playMedia: (embedUrl: string, title: string) => void;
 }
 
 /**
@@ -119,26 +120,50 @@ export function processCommand(
     return { response: `Searching for: ${query} 🔍`, category: 'web', handled: true, action: () => openUrl(`https://www.google.com/search?q=${encodeURIComponent(query)}`) };
   }
 
-  // --- YouTube search ---
-  const ytMatch = text.match(/\b(?:play|search|find)\s+(?:on\s+youtube\s+)?(.+?)\s+(?:on\s+youtube|youtube)$/i)
-    || text.match(/\byoutube\s+(?:search\s+)?(.+)$/i);
-  if (ytMatch) {
-    const query = ytMatch[1].trim();
-    return { response: `Searching YouTube for: ${query} 🎬`, category: 'media', handled: true, action: () => openUrl(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`) };
+  // --- Play [anything] on YouTube — embedded player inside JARVIS ---
+  const ytPlayMatch =
+    text.match(/^play\s+(.+?)\s+on\s+youtube$/i) ||
+    text.match(/^play\s+(.+?)\s+youtube$/i) ||
+    text.match(/^youtube\s+play\s+(.+)$/i);
+  if (ytPlayMatch) {
+    const query = ytPlayMatch[1].trim();
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1&mute=0`;
+    return { response: `Playing "${query}" on YouTube 🎬`, category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, query) };
   }
 
-  // --- Media ---
+  // --- YouTube search (no "play … on youtube") ---
+  const ytSearchMatch =
+    text.match(/\bsearch\s+youtube\s+(?:for\s+)?(.+)$/i) ||
+    text.match(/\byoutube\s+search\s+(?:for\s+)?(.+)$/i);
+  if (ytSearchMatch) {
+    const query = ytSearchMatch[1].trim();
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
+    return { response: `Searching YouTube for: ${query} 🔍`, category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, query) };
+  }
+
+  // --- Media shortcuts ---
   if (text.match(/\bplay\s+music\b/) || text.match(/\bopen\s+music\b/)) {
-    return { response: 'Opening YouTube Music 🎵', category: 'media', handled: true, action: () => openUrl('https://music.youtube.com') };
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=top+hits+2024&autoplay=1`;
+    return { response: 'Playing music 🎵', category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, 'Top Music') };
   }
   if (text.match(/\bplay\s+telugu\s+love\s+songs?\b/)) {
-    return { response: 'Playing Telugu love songs 💕🎵', category: 'media', handled: true, action: () => openUrl('https://www.youtube.com/results?search_query=Telugu+love+songs') };
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=Telugu+love+songs&autoplay=1`;
+    return { response: 'Playing Telugu love songs 💕🎵', category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, 'Telugu Love Songs') };
   }
   if (text.match(/\bplay\s+telugu\s+(songs?|music)\b/)) {
-    return { response: 'Opening Telugu songs 🎵', category: 'media', handled: true, action: () => openUrl('https://www.youtube.com/results?search_query=Telugu+songs') };
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=Telugu+songs&autoplay=1`;
+    return { response: 'Playing Telugu songs 🎵', category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, 'Telugu Songs') };
   }
   if (text.match(/\bplay\s+(upbeat|party)\b/) || text.match(/\bparty\s+(songs?|music)\b/)) {
-    return { response: 'Time to party! 🎉🎵', category: 'media', handled: true, action: () => openUrl('https://www.youtube.com/results?search_query=upbeat+party+songs') };
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=upbeat+party+songs&autoplay=1`;
+    return { response: 'Time to party! 🎉🎵', category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, 'Party Songs') };
+  }
+  // Generic "play [song name]" with no platform specified → YouTube embed
+  const playMatch = text.match(/^play\s+(.+)$/i);
+  if (playMatch) {
+    const query = playMatch[1].trim();
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
+    return { response: `Playing "${query}" 🎵`, category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, query) };
   }
 
   // --- Info ---

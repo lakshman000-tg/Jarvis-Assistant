@@ -12,6 +12,7 @@ import { VoiceCommandHelp } from "@/components/VoiceCommandHelp";
 import { AppLock } from "@/components/AppLock";
 import { VoiceDiagnosticBanner } from "@/components/VoiceDiagnosticBanner";
 import { VoiceStatusDot } from "@/components/VoiceStatusDot";
+import { JarvisMediaPlayer } from "@/components/JarvisMediaPlayer";
 import { Settings } from "@/pages/Settings";
 import { processCommand } from "@/services/commandProcessor";
 import {
@@ -46,6 +47,7 @@ export function Jarvis() {
   const [lastResponse, setLastResponse] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [appLocked, setAppLocked] = useState(false);
+  const [mediaEmbed, setMediaEmbed] = useState<{ url: string; title: string } | null>(null);
 
   const [serviceRunning, setServiceRunning] = useState(isListenerServiceRunning);
   const [screenActive, setScreenActive] = useState(document.visibilityState === "visible");
@@ -122,6 +124,7 @@ export function Jarvis() {
           setTimeout(() => { setIsSystemOnline(false); setConvId(null); }, 2500);
         },
         showHelp: () => setShowHelp(true),
+        playMedia: (url, title) => setMediaEmbed({ url, title }),
       });
 
       if (result.handled) {
@@ -342,6 +345,17 @@ export function Jarvis() {
 
             </AnimatePresence>
           </div>
+
+          {/* Embedded media player — shows when a song/video is playing */}
+          {mediaEmbed && (
+            <div className="mt-2">
+              <JarvisMediaPlayer
+                embedUrl={mediaEmbed.url}
+                title={mediaEmbed.title}
+                onClose={() => setMediaEmbed(null)}
+              />
+            </div>
+          )}
 
           {/* Controls — all in one row with the text input */}
           <div className="mt-3 mb-4 space-y-1.5">
