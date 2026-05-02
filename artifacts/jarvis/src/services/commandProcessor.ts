@@ -18,7 +18,8 @@ export interface CommandProcessorCallbacks {
   lockApp: () => void;
   logout: () => void;
   showHelp: () => void;
-  playMedia: (embedUrl: string, title: string) => void;
+  playMedia: (embedUrl: string, title: string, query?: string, videoId?: string) => void;
+  mediaControl: (action: 'pause' | 'play' | 'next' | 'stop') => void;
 }
 
 /**
@@ -28,19 +29,20 @@ export interface CommandProcessorCallbacks {
  */
 async function searchAndPlayYoutube(
   query: string,
-  callbacks: CommandProcessorCallbacks
+  callbacks: CommandProcessorCallbacks,
+  excludeId?: string
 ): Promise<void> {
-  // Show loading state in the player right away
-  callbacks.playMedia('__loading__', query);
+  callbacks.playMedia('__loading__', query, query);
   try {
-    const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}`);
+    const params = new URLSearchParams({ q: query });
+    if (excludeId) params.set('exclude', excludeId);
+    const res = await fetch(`/api/youtube/search?${params}`);
     if (!res.ok) throw new Error(`Search ${res.status}`);
     const data = await res.json();
-    callbacks.playMedia(data.embedUrl, data.title || query);
+    callbacks.playMedia(data.embedUrl, data.title || query, query, data.id);
   } catch {
-    // Fallback: open YouTube search in browser
     openUrl(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
-    callbacks.playMedia('__error__', query);
+    callbacks.playMedia('__error__', query, query);
   }
 }
 
@@ -189,6 +191,20 @@ export function processCommand(
   if (playMatch) {
     const query = playMatch[1].trim();
     return { response: `Searching for "${query}"… 🎵`, category: 'media', handled: true, action: () => searchAndPlayYoutube(query, callbacks) };
+  }
+
+  // --- Media controls (while video is playing) ---
+  if (text.match(/\bpause\b/)) {
+    return { response: 'Pausing ⏸️', category: 'media', handled: true, action: () => callbacks.mediaControl('pause') };
+  }
+  if (text.match(/\bresume\b/) || text.match(/\bunpause\b/) || text === 'play') {
+    return { response: 'Resuming ▶️', category: 'media', handled: true, action: () => callbacks.mediaControl('play') };
+  }
+  if (text.match(/\bnext\s*(song|track|video)?\b/) || text.match(/\bskip\b/)) {
+    return { response: 'Playing next track ⏭️', category: 'media', handled: true, action: () => callbacks.mediaControl('next') };
+  }
+  if (text.match(/\bstop\s*(music|video|playing|player)?\b/) || text.match(/\bclose\s*(player|music|video)\b/)) {
+    return { response: 'Stopping playback ⏹️', category: 'media', handled: true, action: () => callbacks.mediaControl('stop') };
   }
 
   // --- Info ---

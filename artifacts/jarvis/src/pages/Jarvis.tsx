@@ -48,13 +48,15 @@ export function Jarvis() {
   const [lastResponse, setLastResponse] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [appLocked, setAppLocked] = useState(false);
-  const [mediaEmbed, setMediaEmbed] = useState<{ url: string; title: string } | null>(null);
+  const [mediaEmbed, setMediaEmbed] = useState<{ url: string; title: string; query?: string; videoId?: string } | null>(null);
   const [showEnrollment, setShowEnrollment] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [serviceRunning, setServiceRunning] = useState(isListenerServiceRunning);
   const [screenActive, setScreenActive] = useState(document.visibilityState === "visible");
 
   const processInputRef = useRef<(text: string) => void>(() => {});
+  const mediaEmbedRef = useRef<{ url: string; title: string; query?: string; videoId?: string } | null>(null);
 
   const { mutateAsync: createConv } = useCreateOpenaiConversation();
   const { messages, addMessage, askJarvis, isAnalyzing } = useJarvisChat(convId);
@@ -126,7 +128,35 @@ export function Jarvis() {
           setTimeout(() => { setIsSystemOnline(false); setConvId(null); }, 2500);
         },
         showHelp: () => setShowHelp(true),
-        playMedia: (url, title) => setMediaEmbed({ url, title }),
+        playMedia: (url, title, query, videoId) => {
+          setMediaEmbed({ url, title, query, videoId });
+          // Auto-enable wake word so mic keeps listening while video plays
+          if (mode !== 'wakeWord') startWakeMode();
+        },
+        mediaControl: (action) => {
+          if (action === 'stop') {
+            setMediaEmbed(null);
+            return;
+          }
+          if (action === 'next') {
+            const q = mediaEmbedRef.current?.query || mediaEmbedRef.current?.title || 'music';
+            const excl = mediaEmbedRef.current?.videoId;
+            setMediaEmbed(prev => prev ? { ...prev, url: '__loading__' } : prev);
+            const params = new URLSearchParams({ q });
+            if (excl) params.set('exclude', excl);
+            fetch(`/api/youtube/search?${params}`)
+              .then(r => r.json())
+              .then(data => setMediaEmbed({ url: data.embedUrl, title: data.title || q, query: q, videoId: data.id }))
+              .catch(() => setMediaEmbed(null));
+            return;
+          }
+          // pause / play → postMessage to YouTube iframe (requires enablejsapi=1)
+          const fn = action === 'pause' ? 'pauseVideo' : 'playVideo';
+          iframeRef.current?.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: fn, args: '' }),
+            '*'
+          );
+        },
       });
 
       if (result.handled) {
@@ -145,9 +175,11 @@ export function Jarvis() {
     };
 
     guardVoiceProfile(rawText, execute);
-  }, [isSystemOnline, respondWith, askJarvis, speak, addMessage, updateStatus, guardVoiceProfile]);
+  }, [isSystemOnline, respondWith, askJarvis, speak, addMessage, updateStatus, guardVoiceProfile, mode, startWakeMode]);
 
   useEffect(() => { processInputRef.current = processInput; }, [processInput]);
+  // Keep mediaEmbedRef in sync so the mediaControl 'next' closure always has fresh state
+  useEffect(() => { mediaEmbedRef.current = mediaEmbed; }, [mediaEmbed]);
 
   // Init conversation + auto-start if configured
   useEffect(() => {
@@ -355,6 +387,7 @@ export function Jarvis() {
           {mediaEmbed && (
             <div className="mt-2">
               <JarvisMediaPlayer
+                ref={iframeRef}
                 embedUrl={mediaEmbed.url}
                 title={mediaEmbed.title}
                 onClose={() => setMediaEmbed(null)}

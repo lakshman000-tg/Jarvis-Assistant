@@ -12,9 +12,10 @@ router.get("/search", async (req, res) => {
   }
 
   try {
+    const exclude = String(req.query.exclude ?? "").trim();
     const results = await ytsr(query, { limit: 10 });
     const video = results.items.find(
-      (item: any) => item.type === "video" && item.id && item.title
+      (item: any) => item.type === "video" && item.id && item.title && item.id !== exclude
     );
 
     if (!video) {
@@ -26,7 +27,7 @@ router.get("/search", async (req, res) => {
       id: video.id,
       title: video.title,
       url: `https://www.youtube.com/watch?v=${video.id}`,
-      embedUrl: `https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0`,
+      embedUrl: `https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0&enablejsapi=1`,
       thumbnail: video.bestThumbnail?.url ?? null,
     });
   } catch (err: any) {
