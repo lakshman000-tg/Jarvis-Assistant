@@ -1,0 +1,126 @@
+My application name is “Jarvis”.
+
+The basic version of the app is already completed, but voice command features are not working fully. Please carefully improve the existing app without breaking current login, UI, navigation, Supabase, device tracking, or theft protection features.
+
+Main goal:
+Make Jarvis a mobile-user-friendly, fully working voice assistant app using the local wake command “Hey Jarvis” and allow users to control app/system-related operations through voice commands.
+
+Important limitation:
+Normal Expo/React Native apps cannot control all Android system operations directly. Full system control needs native Android modules, Accessibility Service, Device Admin, or system-level permissions. So first make all possible app-level features work properly, and clearly mark native/system-level areas with comments.
+
+Required feature:
+Local voice assistant mode:
+- Wake phrase: “Hey Jarvis”
+- After wake phrase, listen for user command
+- Add manual fallback buttons:
+  - Start Jarvis
+  - Stop Jarvis
+  - Test Voice Command
+- Show clear status:
+  - Listening
+  - Wake word detected
+  - Processing command
+  - Command completed
+  - Error / permission missing
+
+Voice commands to implement:
+- “Hey Jarvis, open home”
+- “Hey Jarvis, open profile”
+- “Hey Jarvis, open theft protection”
+- “Hey Jarvis, show my devices”
+- “Hey Jarvis, update location”
+- “Hey Jarvis, enable theft mode”
+- “Hey Jarvis, disable theft mode”
+- “Hey Jarvis, fake shutdown”
+- “Hey Jarvis, send emergency alert”
+- “Hey Jarvis, lock app”
+- “Hey Jarvis, logout”
+- “Hey Jarvis, help”
+
+System operation commands:
+Implement what is possible in Expo/React Native:
+- Open app screens
+- Update GPS location
+- Trigger emergency alert
+- Enable/disable app theft mode
+- Start fake shutdown mode
+- Show active login devices
+- Logout user
+- Open Android settings page using Linking if direct control is not possible
+
+For system-level commands like:
+- Turn Wi-Fi on/off
+- Turn mobile data on/off
+- Turn Bluetooth on/off
+- Change brightness
+- Lock real phone
+- Stop real shutdown
+- Control power button
+
+Do not fake these as fully working if Expo cannot do them. Instead:
+- Add placeholder/native-ready functions
+- Show “Needs native Android permission” message
+- Add comments explaining required native modules or Accessibility/Device Admin permission
+
+Technical requirements:
+1. Use TypeScript properly.
+2. Fix all import path errors.
+3. Keep the folder structure clean.
+4. Create reusable services:
+   - utils/jarvisVoiceService.ts
+   - utils/commandProcessor.ts
+   - utils/systemControlService.ts
+   - utils/locationService.ts
+   - utils/emergencyAlertService.ts
+5. Add or update screens/components:
+   - app/(tabs)/home.tsx or index.tsx
+   - app/(tabs)/profile.tsx
+   - app/(tabs)/theft.tsx
+   - components/JarvisVoicePanel.tsx
+   - components/VoiceCommandHelp.tsx
+6. Add permission handling:
+   - Microphone permission
+   - Speech recognition permission
+   - Location permission
+   - Notification permission if needed
+
+Voice processing logic:
+- Detect “hey jarvis”
+- Remove wake phrase from command
+- Match command text with supported command list
+- Execute correct function
+- Give response text on screen
+- Use text-to-speech response if possible:
+  Example: “Theft mode enabled”, “Opening profile”, “Location updated”
+
+Mobile-friendly UI:
+- Make the app simple and easy to use on mobile
+- Large buttons
+- Clear status cards
+- Simple icons
+- Good spacing
+- Dark mode friendly
+- Add a Jarvis dashboard card showing:
+  - Voice status
+  - Last command
+  - Last response
+  - Theft mode status
+  - Location status
+  - Device status
+
+Testing:
+- Add demo/test mode for voice commands where I can type a command manually if microphone does not work.
+- Add a text input called “Test Jarvis Command”.
+- When I type “Hey Jarvis, open profile”, it should run the same command processor as voice.
+- This helps testing in Expo/Replit/web preview.
+
+Very important:
+- Do not remove existing features.
+- Do not rewrite the whole project unnecessarily.
+- First inspect existing files, then modify only required files.
+- Make the app run without blank screen.
+- Fix TypeScript errors after changes.
+- Make it demo-ready and mobile-friendly.
+
+Expected final result:
+Jarvis app should have a working voice assistant panel. When I say or type “Hey Jarvis, update location” or “Hey Jarvis, fake shutdown”, the app should process the command, update UI, call the correct service, and show/speak the result. System-level features that are not possible in Expo should be clearly marked as native-required instead of silently failing.
