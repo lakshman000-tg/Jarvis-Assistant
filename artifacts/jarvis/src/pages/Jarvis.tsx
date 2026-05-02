@@ -84,8 +84,7 @@ export function Jarvis() {
     setLastResponse(response);
     addMessage("user", originalInput);
     addMessage("assistant", response);
-    speak(response);
-  }, [addMessage, speak]);
+  }, [addMessage]);
 
   // ── Voice profile guard ─────────────────────────────────────────────────
   const guardVoiceProfile = useCallback(async (rawText: string, proceed: () => void) => {
