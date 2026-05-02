@@ -1,0 +1,99 @@
+My application name is Jarvis.
+
+Important correction:
+Do NOT include theft protection, fake shutdown, emergency SMS, GPS tracking, or Secure Mobile Guard features in this project.
+
+I want only a Jarvis voice command assistant system, similar to “Hey Google”.
+
+Goal:
+Make Jarvis a mobile-friendly voice assistant app that listens for the wake phrase “Hey Jarvis” and then performs voice commands.
+
+Core features:
+1. Wake phrase:
+   - “Hey Jarvis”
+   - When user says “Hey Jarvis”, app should wake up and start listening for the next command.
+
+2. Voice modes:
+   - Continuous mode:
+     - Mic stays active.
+     - App keeps listening for “Hey Jarvis”.
+     - After wake phrase is detected, capture the user command.
+     - After command completes, return to wake phrase listening.
+   - Manual mode:
+     - User taps mic button once.
+     - App listens for one command.
+     - Command can include “Hey Jarvis” or direct command.
+
+3. Voice state machine:
+   Use simple clear statuses:
+   - Standby
+   - Listening for wake phrase
+   - Wake phrase detected
+   - Listening for command
+   - Processing command
+   - Speaking response
+   - Error / Permission missing
+
+4. UI:
+   Create a clean mobile-friendly Jarvis dashboard:
+   - Big mic button
+   - Continuous mode ON/OFF toggle
+   - Current status card
+   - Last command
+   - Jarvis response
+   - Text input to test commands without microphone
+   - Command help screen
+
+5. Built-in commands:
+   Implement only general assistant/app commands:
+   - “Hey Jarvis, open home”
+   - “Hey Jarvis, open profile”
+   - “Hey Jarvis, open settings”
+   - “Hey Jarvis, open commands”
+   - “Hey Jarvis, search Google for cats”
+   - “Hey Jarvis, open YouTube”
+   - “Hey Jarvis, open WhatsApp”
+   - “Hey Jarvis, what time is it”
+   - “Hey Jarvis, what is today’s date”
+   - “Hey Jarvis, help”
+   - “Hey Jarvis, lock app”
+   - “Hey Jarvis, logout”
+
+6. System operation commands:
+   Implement only what a normal React Native / Expo app can do:
+   - Open app screens
+   - Open external apps/URLs using Linking
+   - Speak responses using text-to-speech
+   - Show command results in UI
+
+7. Do not fake unsupported Android system controls:
+   For commands like Wi-Fi ON/OFF, mobile data ON/OFF, brightness, real phone lock, power button, etc:
+   - Show response: “This needs native Android permission and cannot be controlled from Expo directly.”
+   - Do not pretend it is working.
+
+8. Required files:
+   Create/update:
+   - services/jarvisVoiceService.ts
+   - services/commandProcessor.ts
+   - services/textToSpeechService.ts
+   - components/JarvisVoicePanel.tsx
+   - components/CommandHelp.tsx
+   - app screens for Home, Profile, Settings, Commands
+
+9. Testing:
+   Add a text box:
+   - “Test Jarvis Command”
+   - If I type “Hey Jarvis, open profile”, it should run the same command processor.
+   - This should work even without microphone.
+
+10. Important:
+   - Do not add theft/security features.
+   - Do not add fake shutdown.
+   - Do not add GPS/SMS emergency features.
+   - Do not rewrite the whole project.
+   - Inspect existing files first.
+   - Fix TypeScript errors.
+   - Make the app run without blank screen.
+
+Expected result:
+Jarvis should work like a voice assistant. User says “Hey Jarvis”, app wakes, listens to command, executes supported app/URL commands, speaks response, then returns to listening mode.

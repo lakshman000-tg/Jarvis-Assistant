@@ -9,31 +9,11 @@ import { JarvisMic } from "@/components/JarvisMic";
 import { JarvisMessage } from "@/components/JarvisMessage";
 import { JarvisStatusPanel } from "@/components/JarvisStatusPanel";
 import { VoiceCommandHelp } from "@/components/VoiceCommandHelp";
-import { FakeShutdown } from "@/components/FakeShutdown";
-import { EmergencyAlert } from "@/components/EmergencyAlert";
 import { AppLock } from "@/components/AppLock";
 import { processCommand } from "@/services/commandProcessor";
-import { getCurrentLocation, formatLocation } from "@/services/locationService";
-import { triggerEmergencyAlert } from "@/services/emergencyAlertService";
 import { cn } from "@/lib/utils";
 
 type AppView = "chat" | "dashboard" | "commands";
-
-function getDeviceInfo() {
-  const ua = navigator.userAgent;
-  const browser = ua.includes("Chrome") ? "Chrome"
-    : ua.includes("Firefox") ? "Firefox"
-    : ua.includes("Safari") ? "Safari" : "Browser";
-  const os = ua.includes("Win") ? "Windows"
-    : ua.includes("Mac") ? "macOS"
-    : ua.includes("Linux") ? "Linux"
-    : ua.includes("Android") ? "Android" : "Unknown OS";
-  return {
-    browser: `${browser} (${window.innerWidth}×${window.innerHeight})`,
-    os,
-    lastSeen: new Date().toLocaleTimeString(),
-  };
-}
 
 const TABS: { id: AppView; label: string }[] = [
   { id: "chat", label: "Chat" },
@@ -48,25 +28,17 @@ export function Jarvis() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [isSystemOnline, setIsSystemOnline] = useState(false);
 
-  // App feature state
-  const [theftEnabled, setTheftEnabled] = useState(false);
-  const [locationText, setLocationText] = useState("");
-  const [locationLoading, setLocationLoading] = useState(false);
   const [lastCommand, setLastCommand] = useState("");
   const [lastResponse, setLastResponse] = useState("");
   const [showHelp, setShowHelp] = useState(false);
-  const [fakeShutdown, setFakeShutdown] = useState(false);
-  const [emergencyMsg, setEmergencyMsg] = useState("");
   const [appLocked, setAppLocked] = useState(false);
-  const [deviceInfo] = useState(getDeviceInfo);
 
-  // Ref so processInput can be stable yet access latest state
+  // Stable ref so speech callback can always call the latest processInput
   const processInputRef = useRef<(text: string) => void>(() => {});
 
   const { mutateAsync: createConv } = useCreateOpenaiConversation();
   const { messages, addMessage, askJarvis, isAnalyzing } = useJarvisChat(convId);
 
-  // Stable callback passed to useSpeech — always calls latest processInput via ref
   const onSpeechResult = useCallback((text: string) => {
     processInputRef.current(text);
   }, []);
@@ -78,17 +50,6 @@ export function Jarvis() {
     speak, updateStatus,
   } = useSpeech(onSpeechResult);
 
-  // Location helper
-  const handleUpdateLocation = useCallback(async (): Promise<string> => {
-    setLocationLoading(true);
-    const result = await getCurrentLocation();
-    const text = formatLocation(result);
-    setLocationText(text);
-    setLocationLoading(false);
-    return text;
-  }, []);
-
-  // Respond with a canned response (built-in commands)
   const respondWith = useCallback((response: string, originalInput: string) => {
     setLastCommand(originalInput);
     setLastResponse(response);
@@ -97,18 +58,14 @@ export function Jarvis() {
     speak(response);
   }, [addMessage, speak]);
 
-  // The central input processor
   const processInput = useCallback((rawText: string) => {
     if (!rawText.trim() || !isSystemOnline) return;
 
     const result = processCommand(rawText, {
       navigate: (v) => setView(v as AppView),
-      toggleTheft: (enabled) => setTheftEnabled(enabled),
-      fakeShutdown: () => setFakeShutdown(true),
-      emergencyAlert: () => setEmergencyMsg(triggerEmergencyAlert()),
       lockApp: () => setAppLocked(true),
       logout: () => {
-        const msg = "Session terminated. Goodbye. 👋";
+        const msg = "Session terminated. Goodbye! 👋";
         addMessage("user", rawText);
         addMessage("assistant", msg);
         setLastCommand(rawText);
@@ -119,64 +76,43 @@ export function Jarvis() {
           setConvId(null);
         }, 2500);
       },
-      updateLocation: async () => {
-        const loc = await handleUpdateLocation();
-        const response = loc.startsWith("Location error")
-          ? `⚠️ ${loc}`
-          : `Location updated 📍 ${loc}`;
-        setLastCommand(rawText);
-        setLastResponse(response);
-        addMessage("user", rawText);
-        addMessage("assistant", response);
-        speak(response);
-      },
       showHelp: () => setShowHelp(true),
-      isTheftEnabled: theftEnabled,
     });
 
     if (result.handled) {
-      // Some commands handle their own messaging (async ones like location/logout)
-      const isAsyncSelf = ["update location", "get location", "logout", "log out", "sign out"]
-        .some((a) => rawText.toLowerCase().includes(a));
-
-      result.action(); // always execute action
-
-      if (!isAsyncSelf) {
+      result.action();
+      // For logout, messaging is handled inline above
+      if (!rawText.toLowerCase().replace(/^hey\s+jarvis[,.]?\s*/i, '').match(/\blog\s*(out|off)\b|\bsign\s*out\b/)) {
         respondWith(result.response, rawText);
       }
     } else {
-      // Send to AI GPT
+      // Send to JARVIS AI
       updateStatus("processing");
       setLastCommand(rawText);
-      askJarvis(rawText, (aiResponse) => {
+      askJarvis(rawText.replace(/^hey\s+jarvis[,.]?\s*/i, '').trim(), (aiResponse) => {
         setLastResponse(aiResponse);
         speak(aiResponse);
       });
     }
-  }, [
-    isSystemOnline, theftEnabled,
-    respondWith, askJarvis, speak, addMessage,
-    handleUpdateLocation, updateStatus,
-  ]);
+  }, [isSystemOnline, respondWith, askJarvis, speak, addMessage, updateStatus]);
 
-  // Keep the ref up to date so the stable onSpeechResult callback always calls the latest version
   useEffect(() => { processInputRef.current = processInput; }, [processInput]);
 
-  // Initialize conversation on mount
+  // Init conversation
   useEffect(() => {
     createConv({ data: { title: "JARVIS Session" } })
       .then((res) => {
         setConvId(res.id);
         setIsSystemOnline(true);
-        addMessage("system", "System online. Core systems engaged. Awaiting input.");
+        addMessage("system", "System online. JARVIS is ready. Say \"Hey JARVIS\" or type a command.");
       })
       .catch(() => {
-        addMessage("system", "ERROR: Failed to establish secure connection.");
+        addMessage("system", "ERROR: Failed to connect to JARVIS core.");
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-scroll chat on new messages
+  // Auto-scroll
   useEffect(() => {
     if (chatScrollRef.current && view === "chat") {
       chatScrollRef.current.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
@@ -192,58 +128,56 @@ export function Jarvis() {
   };
 
   const statusColorClass =
-    status === "error" || status === "noPermission" ? "border-red-500/40 bg-red-950/30 text-red-400"
-    : status === "wakeDetected" || status === "speaking" ? "border-yellow-500/40 bg-yellow-950/30 text-yellow-300"
-    : mode !== "off" ? "border-jarvis-cyan/30 bg-jarvis-cyan/5 text-jarvis-cyan"
-    : "border-jarvis-cyan/10 bg-black/20 text-jarvis-cyan-dark";
+    status === "error" || status === "noPermission"
+      ? "border-red-500/40 bg-red-950/30 text-red-400"
+      : status === "wakeDetected" || status === "speaking" || status === "listeningForCommand"
+      ? "border-yellow-500/40 bg-yellow-950/30 text-yellow-300"
+      : mode !== "off"
+      ? "border-jarvis-cyan/30 bg-jarvis-cyan/5 text-jarvis-cyan"
+      : "border-jarvis-cyan/10 bg-black/20 text-jarvis-cyan-dark";
 
-  const statusDotColor =
+  const dotColor =
     status === "error" || status === "noPermission" ? "bg-red-500"
-    : status === "wakeDetected" || status === "speaking" ? "bg-yellow-400"
+    : status === "wakeDetected" || status === "speaking" || status === "listeningForCommand" ? "bg-yellow-400"
     : mode !== "off" ? "bg-jarvis-cyan"
     : "bg-gray-600";
 
   return (
     <>
-      {/* Overlay modals */}
-      <FakeShutdown active={fakeShutdown} onDismiss={() => setFakeShutdown(false)} />
-      <EmergencyAlert active={!!emergencyMsg} message={emergencyMsg} onDismiss={() => setEmergencyMsg("")} />
       <AppLock locked={appLocked} onUnlock={() => setAppLocked(false)} />
       <VoiceCommandHelp open={showHelp} onClose={() => setShowHelp(false)} />
 
       <div className="min-h-screen w-full relative flex flex-col bg-jarvis-navy overflow-hidden">
-        {/* Background */}
         <div className="absolute inset-0 z-0 opacity-20 pointer-events-none mix-blend-screen">
           <img src={`${import.meta.env.BASE_URL}images/jarvis-core.png`} alt="" className="w-full h-full object-cover" />
         </div>
         <div className="scanlines" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-jarvis-navy/80 to-jarvis-navy pointer-events-none z-0" />
 
-        {/* Main layout */}
         <div className="relative z-10 flex flex-col h-screen max-w-4xl mx-auto w-full px-3 sm:px-6">
           <JarvisHeader />
 
-          {/* Live status bar */}
+          {/* Status bar */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className={cn(
-              "flex items-center justify-between px-3 py-2 mb-2 rounded border text-xs font-display tracking-widest uppercase",
+              "flex items-center justify-between px-3 py-2 mb-2 rounded border text-xs font-display tracking-widest uppercase transition-colors",
               statusColorClass
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <motion.div
-                animate={mode !== "off" ? { opacity: [1, 0.3, 1] } : { opacity: 0.4 }}
+                animate={mode !== "off" ? { opacity: [1, 0.3, 1] } : { opacity: 0.5 }}
                 transition={{ repeat: Infinity, duration: 1.2 }}
-                className={cn("w-2 h-2 rounded-full flex-shrink-0", statusDotColor)}
+                className={cn("w-2 h-2 rounded-full flex-shrink-0", dotColor)}
               />
               <span className="truncate">{statusLabel}</span>
             </div>
             <button
               onClick={() => setShowHelp(true)}
               className="hover:opacity-80 transition-opacity flex-shrink-0 ml-2"
-              aria-label="Help"
+              aria-label="Command help"
             >
               <HelpCircle className="w-4 h-4" />
             </button>
@@ -270,6 +204,7 @@ export function Jarvis() {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
+              {/* CHAT */}
               {view === "chat" && (
                 <motion.div
                   key="chat"
@@ -284,9 +219,7 @@ export function Jarvis() {
                     className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md hud-clip shadow-[inset_0_0_20px_rgba(0,255,255,0.05)]"
                   >
                     <AnimatePresence initial={false}>
-                      {messages.map((msg) => (
-                        <JarvisMessage key={msg.id} {...msg} />
-                      ))}
+                      {messages.map((msg) => <JarvisMessage key={msg.id} {...msg} />)}
                       {isAnalyzing && (
                         <JarvisMessage key="analyzing" role="assistant" content="JARVIS is analyzing..." isStreaming />
                       )}
@@ -303,6 +236,7 @@ export function Jarvis() {
                 </motion.div>
               )}
 
+              {/* DASHBOARD */}
               {view === "dashboard" && (
                 <motion.div
                   key="dashboard"
@@ -317,13 +251,11 @@ export function Jarvis() {
                     voiceMode={mode}
                     lastCommand={lastCommand}
                     lastResponse={lastResponse}
-                    theftEnabled={theftEnabled}
-                    location={locationLoading ? "Updating location..." : locationText}
-                    deviceInfo={deviceInfo}
                   />
                 </motion.div>
               )}
 
+              {/* COMMANDS */}
               {view === "commands" && (
                 <motion.div
                   key="commands"
@@ -333,21 +265,23 @@ export function Jarvis() {
                   transition={{ duration: 0.15 }}
                   className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md p-4 space-y-4"
                 >
-                  <p className="text-[10px] font-display tracking-[0.3em] text-jarvis-cyan-dark uppercase">Quick Action Buttons</p>
+                  <p className="text-[10px] font-display tracking-[0.3em] text-jarvis-cyan-dark uppercase">
+                    Quick Action Buttons
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { label: "Update Location", cmd: "update location" },
-                      { label: "Enable Theft Mode", cmd: "enable theft mode" },
-                      { label: "Disable Theft Mode", cmd: "disable theft mode" },
-                      { label: "Fake Shutdown", cmd: "fake shutdown" },
-                      { label: "Emergency Alert 🚨", cmd: "send emergency alert" },
-                      { label: "Lock App 🔐", cmd: "lock app" },
-                      { label: "Tell Time ⏰", cmd: "tell time" },
                       { label: "Open YouTube 🚀", cmd: "open youtube" },
+                      { label: "Open WhatsApp 💬", cmd: "open whatsapp" },
                       { label: "Play Music 🎵", cmd: "play music" },
                       { label: "Telugu Songs 🎶", cmd: "play telugu songs" },
+                      { label: "What Time Is It ⏰", cmd: "what time is it" },
+                      { label: "Today's Date 📅", cmd: "what is today's date" },
                       { label: "Open Gmail 📧", cmd: "open gmail" },
+                      { label: "Google Maps 🗺️", cmd: "open maps" },
+                      { label: "Lock App 🔐", cmd: "lock app" },
                       { label: "Help 📖", cmd: "help" },
+                      { label: "Open Home 🏠", cmd: "open home" },
+                      { label: "Open Settings ⚙️", cmd: "open settings" },
                     ].map(({ label, cmd }) => (
                       <button
                         key={cmd}
@@ -359,6 +293,7 @@ export function Jarvis() {
                       </button>
                     ))}
                   </div>
+
                   <button
                     onClick={() => setShowHelp(true)}
                     className="w-full bg-jarvis-cyan/5 border border-jarvis-cyan/30 text-jarvis-cyan text-xs font-display tracking-[0.2em] uppercase py-3 rounded hover:bg-jarvis-cyan/10 transition-all flex items-center justify-center gap-2"
@@ -370,11 +305,11 @@ export function Jarvis() {
             </AnimatePresence>
           </div>
 
-          {/* Bottom controls */}
+          {/* Controls */}
           <div className="mt-4 mb-5 flex flex-col items-center gap-3">
-            {/* Wake word + mic controls */}
+            {/* Wake word + mic row */}
             <div className="flex items-center justify-center gap-3 flex-wrap w-full">
-              {/* "Hey JARVIS" continuous mode */}
+              {/* Continuous "Hey JARVIS" mode */}
               <button
                 onClick={mode === "wakeWord" ? stopListening : startWakeMode}
                 disabled={!isSupported || !isSystemOnline}
@@ -397,19 +332,17 @@ export function Jarvis() {
                 disabled={!isSupported || !isSystemOnline}
               />
 
-              {/* Stop listening */}
               {mode !== "off" && (
                 <button
                   onClick={stopListening}
                   className="flex items-center gap-2 px-4 py-2.5 text-xs font-display tracking-widest uppercase border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded transition-all"
                 >
-                  <Power className="w-4 h-4" />
-                  Stop
+                  <Power className="w-4 h-4" /> Stop
                 </button>
               )}
             </div>
 
-            {/* Test / text input */}
+            {/* Test text input */}
             <form onSubmit={handleSubmitText} className="w-full max-w-2xl relative flex items-center group">
               <div className="absolute left-4 text-jarvis-cyan/50 group-focus-within:text-jarvis-cyan transition-colors">
                 <Terminal size={18} />
@@ -418,11 +351,7 @@ export function Jarvis() {
                 type="text"
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
-                placeholder={
-                  isSupported
-                    ? 'Type "Hey JARVIS, open profile" to test...'
-                    : "Voice not supported — type any command here"
-                }
+                placeholder='Type "Hey JARVIS, open youtube" to test...'
                 disabled={!isSystemOnline}
                 className="w-full bg-jarvis-dark/80 border-b-2 border-t-0 border-x-0 border-jarvis-cyan/30 text-jarvis-cyan placeholder:text-jarvis-cyan-dark/50 font-body px-12 py-3 focus:outline-none focus:border-jarvis-cyan focus:bg-jarvis-dark transition-all text-sm disabled:opacity-50"
               />
@@ -437,7 +366,7 @@ export function Jarvis() {
 
             {!isSupported && (
               <p className="text-yellow-500/70 text-[10px] font-display tracking-widest text-center">
-                ⚠ Speech recognition unavailable in this browser. Use the text input above.
+                ⚠ Voice recognition unavailable in this browser. Use the text input above to test commands.
               </p>
             )}
           </div>
