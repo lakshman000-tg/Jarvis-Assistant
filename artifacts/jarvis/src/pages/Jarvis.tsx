@@ -13,6 +13,7 @@ import { AppLock } from "@/components/AppLock";
 import { VoiceDiagnosticBanner } from "@/components/VoiceDiagnosticBanner";
 import { VoiceStatusDot } from "@/components/VoiceStatusDot";
 import { JarvisMediaPlayer } from "@/components/JarvisMediaPlayer";
+import { VoiceEnrollment } from "@/components/VoiceEnrollment";
 import { Settings } from "@/pages/Settings";
 import { processCommand } from "@/services/commandProcessor";
 import {
@@ -48,6 +49,7 @@ export function Jarvis() {
   const [showHelp, setShowHelp] = useState(false);
   const [appLocked, setAppLocked] = useState(false);
   const [mediaEmbed, setMediaEmbed] = useState<{ url: string; title: string } | null>(null);
+  const [showEnrollment, setShowEnrollment] = useState(false);
 
   const [serviceRunning, setServiceRunning] = useState(isListenerServiceRunning);
   const [screenActive, setScreenActive] = useState(document.visibilityState === "visible");
@@ -206,6 +208,9 @@ export function Jarvis() {
     <>
       <AppLock locked={appLocked} onUnlock={() => setAppLocked(false)} />
       <VoiceCommandHelp open={showHelp} onClose={() => setShowHelp(false)} />
+      {showEnrollment && (
+        <VoiceEnrollment onClose={() => setShowEnrollment(false)} />
+      )}
 
       <div className="min-h-screen w-full relative flex flex-col bg-jarvis-navy overflow-hidden">
         <div className="absolute inset-0 z-0 opacity-20 pointer-events-none mix-blend-screen">
@@ -339,7 +344,7 @@ export function Jarvis() {
               {/* SETTINGS */}
               {view === "settings" && (
                 <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md">
-                  <Settings onAutoStart={startWakeMode} />
+                  <Settings onAutoStart={startWakeMode} onOpenEnrollment={() => setShowEnrollment(true)} />
                 </motion.div>
               )}
 

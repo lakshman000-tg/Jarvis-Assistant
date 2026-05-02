@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { ShieldAlert, Mic, Radio, Volume2, Zap, User, ChevronRight, Info } from 'lucide-react';
 import {
-  loadSettings, saveSettings, loadProfile, deleteProfile,
+  loadSettings, saveSettings, loadProfile,
   type VoiceSettings,
 } from '@/services/voiceProfileService';
 import {
   isListenerServiceRunning, startForegroundListener, stopForegroundListener,
 } from '@/services/foregroundListenerService';
 import { VoiceStatusDot } from '@/components/VoiceStatusDot';
-import { VoiceEnrollment } from '@/components/VoiceEnrollment';
 import { cn } from '@/lib/utils';
 
 interface SettingsProps {
   onAutoStart?: () => void;
+  onOpenEnrollment?: () => void;
 }
 
 function Toggle({
@@ -77,18 +76,22 @@ function SensitivitySlider({
   );
 }
 
-export function Settings({ onAutoStart }: SettingsProps) {
+export function Settings({ onAutoStart, onOpenEnrollment }: SettingsProps) {
   const [settings, setSettings] = useState<VoiceSettings>(loadSettings);
   const [serviceRunning, setServiceRunning] = useState(isListenerServiceRunning);
   const [screenActive, setScreenActive] = useState(document.visibilityState === 'visible');
   const [voiceProfileExists, setVoiceProfileExists] = useState(() => !!loadProfile());
-  const [showEnrollment, setShowEnrollment] = useState(false);
 
   useEffect(() => {
     const handleVis = () => setScreenActive(document.visibilityState === 'visible');
     document.addEventListener('visibilitychange', handleVis);
     return () => document.removeEventListener('visibilitychange', handleVis);
   }, []);
+
+  // Refresh profile status whenever the settings tab is shown
+  useEffect(() => {
+    setVoiceProfileExists(!!loadProfile());
+  });
 
   const update = (patch: Partial<VoiceSettings>) => {
     const next = { ...settings, ...patch };
@@ -112,14 +115,8 @@ export function Settings({ onAutoStart }: SettingsProps) {
     if (val && onAutoStart) onAutoStart();
   };
 
-  const handleEnrollClose = () => {
-    setShowEnrollment(false);
-    setVoiceProfileExists(!!loadProfile());
-  };
-
   return (
     <>
-      {showEnrollment && <VoiceEnrollment onClose={handleEnrollClose} />}
 
       <div className="p-4 space-y-5">
 
@@ -179,7 +176,7 @@ export function Settings({ onAutoStart }: SettingsProps) {
             <SensitivitySlider value={settings.sensitivity} onChange={val => update({ sensitivity: val })} />
           )}
           <button
-            onClick={() => setShowEnrollment(true)}
+            onClick={() => onOpenEnrollment?.()}
             className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-jarvis-cyan/10 bg-black/20 hover:border-jarvis-cyan/30 transition-all"
           >
             <div>
