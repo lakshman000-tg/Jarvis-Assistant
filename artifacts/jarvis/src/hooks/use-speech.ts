@@ -65,8 +65,13 @@ export function useSpeech(onResult: (text: string) => void) {
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
     recognitionRunningRef.current = false;
-    try { recognitionRef.current?.abort(); } catch { /* ignore */ }
-    recognitionRef.current = null;
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      recognitionRef.current.onresult = null;
+      recognitionRef.current.onerror = null;
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
     setInterimText('');
   }, []);
 
@@ -353,10 +358,17 @@ export function useSpeech(onResult: (text: string) => void) {
 
     // Stop recognition during TTS to prevent the mic from picking up
     // JARVIS's own voice and creating an echo / command loop.
+    // IMPORTANT: null out onend BEFORE aborting — otherwise onend fires
+    // and schedules a 100ms restart that races with the TTS playback.
     if (!isNative) {
       if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
-      try { recognitionRef.current?.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null;   // prevent the restart timer in onend
+        recognitionRef.current.onresult = null; // discard any in-flight results
+        recognitionRef.current.onerror = null;
+        try { recognitionRef.current.abort(); } catch { /* ignore */ }
+        recognitionRef.current = null;
+      }
       recognitionRunningRef.current = false;
     }
 
