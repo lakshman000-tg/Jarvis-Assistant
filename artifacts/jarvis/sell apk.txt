@@ -1,0 +1,229 @@
+================================================================
+  JARVIS AI VOICE ASSISTANT — APK DEVELOPMENT & SELLING GUIDE
+================================================================
+
+PRODUCT OVERVIEW
+----------------
+App Name   : JARVIS — AI Voice Assistant
+Package ID : com.jarvis.assistant
+Platform   : Android (APK / Google Play)
+Tech Stack : React + Vite + Express + Capacitor + OpenAI GPT + TTS
+Voice Engine: Native Android SpeechRecognizer (via Capacitor plugin)
+Wake Word  : "Hey JARVIS"
+
+
+================================================================
+PART 1 — BUILDING THE RELEASE APK
+================================================================
+
+Prerequisites (install on your local machine)
+----------------------------------------------
+- Android Studio (latest stable)
+- JDK 17 (bundled with Android Studio or install separately)
+- Node.js 18+ and pnpm
+- Android SDK Platform 33 or higher
+- A physical or virtual Android device for testing
+
+Step-by-Step Build
+------------------
+1. Deploy the web app on Replit first (click "Deploy").
+   Copy the deployment URL, e.g. https://your-app.replit.app
+
+2. Open artifacts/jarvis/capacitor.config.ts and update:
+     server: { url: 'https://your-app.replit.app' }
+
+3. Clone or download the project to your local machine.
+
+4. Run the automated build script:
+     bash artifacts/jarvis/build-apk.sh
+
+   This will:
+   - Build the Vite web bundle (BASE_PATH=/)
+   - Initialize the Android project (npx cap add android)
+   - Apply mic permission patches to AndroidManifest.xml
+   - Apply MainActivity.java WebView mic grant
+   - Sync the web build (npx cap sync)
+   - Compile the debug APK with Gradle
+
+5. Debug APK output:
+     artifacts/jarvis/android/app/build/outputs/apk/debug/app-debug.apk
+
+Building a SIGNED Release APK (required for selling)
+-----------------------------------------------------
+1. Generate a keystore (do this once and keep it safe):
+     keytool -genkey -v -keystore jarvis-release.keystore \
+       -alias jarvis -keyalg RSA -keysize 2048 -validity 10000
+
+2. In Android Studio open: File → Open → artifacts/jarvis/android
+
+3. Go to: Build → Generate Signed Bundle / APK
+   - Select APK
+   - Choose your keystore file
+   - Enter keystore password, alias, and alias password
+   - Select "release" build variant
+   - Click Finish
+
+4. Release APK output:
+     android/app/release/app-release.apk
+
+5. (Recommended) Build an Android App Bundle (.aab) for Google Play:
+   Build → Generate Signed Bundle / APK → Android App Bundle
+
+
+================================================================
+PART 2 — TESTING THE APK
+================================================================
+
+Install on a device via ADB
+----------------------------
+  adb install android/app/build/outputs/apk/debug/app-debug.apk
+
+First-launch checklist
+-----------------------
+[ ] App opens to JARVIS HUD screen
+[ ] Tap "HEY JARVIS" button — Android mic permission dialog appears
+[ ] Grant mic permission — button turns active
+[ ] Say "Hey JARVIS, what is the weather today?" — JARVIS responds
+[ ] AI response is spoken aloud (OpenAI TTS, Onyx voice)
+[ ] Test typing a command in the text box — response works
+[ ] Open the Dashboard tab — stats display
+[ ] Open the Commands tab — command list shows
+
+Device requirements
+-------------------
+- Android 8.0+ (API level 26 minimum)
+- Google app installed (for native SpeechRecognizer engine)
+- Internet connection (AI calls go to your deployed backend)
+
+
+================================================================
+PART 3 — WHERE & HOW TO SELL THE APK
+================================================================
+
+Option A — Google Play Store (recommended)
+------------------------------------------
+Cost     : $25 one-time developer registration fee
+Link     : https://play.google.com/console
+
+Steps:
+1. Create a Google Play Developer account ($25 fee)
+2. Create a new app in the console
+3. Upload the signed .aab (App Bundle) file
+4. Fill in: store listing, screenshots, description, category
+   - Category: Productivity / Tools
+   - Tags: AI assistant, voice assistant, smart home, chatbot
+5. Set pricing: Free, Free with in-app purchases, or Paid
+6. Submit for review (usually 3–7 days)
+
+Pricing strategies:
+  - Free + show ads (AdMob integration)
+  - Free trial + $2.99 one-time unlock
+  - $1.99 – $4.99 paid upfront (for niche AI tools)
+  - $0.99/month subscription for premium features
+
+Option B — Direct APK Sales (no store fee)
+-------------------------------------------
+Platforms to sell direct APKs:
+  - https://gumroad.com   (easy setup, takes ~10% fee)
+  - https://itch.io       (popular for indie apps/games)
+  - https://sellfy.com    (digital products storefront)
+  - Your own website      (use Stripe or PayPal)
+
+How it works:
+1. Upload your signed release APK to the platform
+2. Set a price (e.g. $2.99 one-time)
+3. Buyers download the APK and sideload it on their Android device
+4. Instructions to share with buyers:
+     a. Go to Settings → Apps → Special app access → Install unknown apps
+     b. Enable for your file manager or browser
+     c. Open the downloaded APK file and tap Install
+
+Option C — Freelance / Custom Builds
+--------------------------------------
+Sell customized versions of JARVIS:
+  - Change wake word, branding, colors for clients
+  - Offer on Fiverr, Upwork, or Freelancer.com
+  - Package: $50–$200 per custom build + $20/month hosting fee
+
+Option D — White-label Licensing
+----------------------------------
+License the app to businesses:
+  - Rename to their brand (e.g. "ARIA by [Company]")
+  - Change appId and server URL to their backend
+  - Charge $500–$2000 per license + ongoing support retainer
+
+
+================================================================
+PART 4 — MONETIZATION IDEAS
+================================================================
+
+In-App Purchases (via Google Play Billing)
+-------------------------------------------
+- Unlock additional AI personas/voices
+- Premium command packs (smart home, calendar integration)
+- Offline mode (bundle a small on-device model)
+- Priority response (dedicated backend tier)
+
+Subscription (recurring revenue)
+----------------------------------
+- Free tier  : 20 AI requests/day, standard TTS voice
+- Pro $4.99/mo: unlimited requests, all voices, wake word mode
+- Team $9.99/mo: multi-device, admin dashboard
+
+Backend Cost Estimate (your Replit deployment)
+-----------------------------------------------
+- OpenAI GPT-4o: ~$0.005 per request (50 msg = $0.25)
+- OpenAI TTS   : ~$0.015 per 1000 chars (~$0.01 per response)
+- Replit hosting: free tier or $20/month Replit Core
+- Budget ~$0.02–0.05 per active user/day
+
+
+================================================================
+PART 5 — IMPORTANT NOTES FOR SELLING
+================================================================
+
+Legal
+------
+- JARVIS is a fictional AI from Marvel/Iron Man. Do NOT use
+  "JARVIS" as your commercial app name on app stores without
+  risk of trademark issues. Rename to something original like:
+  ARIA, NOVA, AXIS, VIRA, SAGE, etc.
+- Include a Privacy Policy (required by Google Play).
+  You can generate one free at https://privacypolicygenerator.info
+- Disclose that the app uses OpenAI APIs and processes voice data.
+
+API Key / Backend Security
+---------------------------
+- The OpenAI API key lives on your Replit backend — NOT in the APK.
+  This means users cannot extract it. Good.
+- Rate-limit your /api/chat and /api/openai/tts endpoints to
+  prevent abuse (add IP-based or user-based limits).
+- Consider adding user authentication (Replit Auth or Clerk)
+  before monetizing at scale.
+
+App Store Policies
+-------------------
+- Voice recording apps must have clear user disclosure.
+- Your app only records when the user activates it — compliant.
+- Describe mic use in store listing: "Used for voice commands only."
+
+
+================================================================
+QUICK REFERENCE — KEY FILES
+================================================================
+
+capacitor.config.ts          Capacitor app config (update server.url)
+build-apk.sh                 Automated local APK build script
+android-config/
+  AndroidManifest.xml        Android permissions template
+  MainActivity.java          WebView mic-grant override
+src/hooks/use-speech.ts      Voice engine (auto web vs native)
+src/services/
+  nativeSpeechService.ts     Capacitor native Android speech
+  commandProcessor.ts        Command routing logic
+src/pages/Jarvis.tsx         Main app page
+artifacts/api-server/        Backend: AI chat + TTS endpoints
+
+================================================================
+                    Good luck selling JARVIS!
+================================================================

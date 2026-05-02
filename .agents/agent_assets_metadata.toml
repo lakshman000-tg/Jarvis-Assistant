@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "wtKezaRZL2aeTjsqdBVPm"
+uri = "file://artifacts/jarvis/sell apk.txt"
+type = "text"
+title = "JARVIS APK Development & Selling Guide"
