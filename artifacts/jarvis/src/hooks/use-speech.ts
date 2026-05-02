@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  isCapacitorNative,
+  requestNativeMicPermission,
+  startNativeListening,
+  stopNativeListening,
+} from '@/services/nativeSpeechService';
 
 declare global {
   interface Window {
@@ -37,6 +43,7 @@ export function useSpeech(onResult: (text: string) => void) {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [isSupported, setIsSupported] = useState(true);
   const [interimText, setInterimText] = useState('');
+  const [isNative] = useState(() => isCapacitorNative());
 
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -45,19 +52,20 @@ export function useSpeech(onResult: (text: string) => void) {
   const onResultRef = useRef(onResult);
   const wakeListenRef = useRef<() => void>(() => {});
 
-  // Keep callback ref up to date without triggering re-renders
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
   const updateStatus = useCallback((s: VoiceStatus) => setStatus(s), []);
 
-  const stopAllRecognition = useCallback(() => {
+  // ─── WEB: browser SpeechRecognition helpers ──────────────────────────────
+
+  const stopWebRecognition = useCallback(() => {
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     try { recognitionRef.current?.abort(); } catch { /* ignore */ }
     recognitionRef.current = null;
     setInterimText('');
   }, []);
 
-  const buildRecognition = useCallback((continuous: boolean) => {
+  const buildWebRecognition = useCallback((continuous: boolean) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const r = new SR();
@@ -68,12 +76,11 @@ export function useSpeech(onResult: (text: string) => void) {
     return r;
   }, []);
 
-  // Wake-word continuous listening — uses ref so it can call itself recursively
-  const startWakeWordListening = useCallback(() => {
-    stopAllRecognition();
-    const r = buildRecognition(true);
+  // Web wake-word continuous listening
+  const startWebWakeListening = useCallback(() => {
+    stopWebRecognition();
+    const r = buildWebRecognition(true);
     if (!r) { updateStatus('notSupported'); setIsSupported(false); return; }
-
     recognitionRef.current = r;
 
     r.onstart = () => updateStatus('listeningForWake');
@@ -85,7 +92,6 @@ export function useSpeech(onResult: (text: string) => void) {
         const lower = transcript.toLowerCase();
 
         if (!isFinal) { setInterimText(transcript); continue; }
-
         setInterimText('');
 
         if (lower.includes('hey jarvis')) {
@@ -95,16 +101,13 @@ export function useSpeech(onResult: (text: string) => void) {
             updateStatus('processing');
             onResultRef.current(cleaned);
           } else {
-            // Need follow-up utterance
             updateStatus('listeningForCommand');
           }
-        } else if (modeRef.current === 'wakeWord') {
-          // Check if we're in follow-up command mode
+        } else {
           setStatus((prev) => {
             if (prev === 'listeningForCommand') {
               updateStatus('processing');
               onResultRef.current(transcript.trim());
-              // Return to wake mode after a short delay
               restartTimerRef.current = setTimeout(() => {
                 if (modeRef.current === 'wakeWord') wakeListenRef.current();
               }, 3000);
@@ -123,7 +126,6 @@ export function useSpeech(onResult: (text: string) => void) {
 
     r.onend = () => {
       setInterimText('');
-      // Auto-restart if still in wake-word mode
       if (modeRef.current === 'wakeWord') {
         restartTimerRef.current = setTimeout(() => {
           if (modeRef.current === 'wakeWord') wakeListenRef.current();
@@ -133,37 +135,34 @@ export function useSpeech(onResult: (text: string) => void) {
       }
     };
 
-    try {
-      r.start();
-    } catch (e: any) {
+    try { r.start(); } catch (e: any) {
       if (String(e).includes('not-allowed')) updateStatus('noPermission');
     }
-  }, [buildRecognition, stopAllRecognition, updateStatus]);
+  }, [buildWebRecognition, stopWebRecognition, updateStatus]);
 
-  // Store latest ref so recursive calls always use the latest version
-  useEffect(() => { wakeListenRef.current = startWakeWordListening; }, [startWakeWordListening]);
+  useEffect(() => { wakeListenRef.current = startWebWakeListening; }, [startWebWakeListening]);
 
-  const startManualListening = useCallback(() => {
-    stopAllRecognition();
-    const r = buildRecognition(false);
+  // Web manual one-shot listening
+  const startWebManualListening = useCallback(() => {
+    stopWebRecognition();
+    const r = buildWebRecognition(false);
     if (!r) { updateStatus('notSupported'); setIsSupported(false); return; }
-
     recognitionRef.current = r;
 
     r.onstart = () => updateStatus('listeningForCommand');
 
     r.onresult = (event: any) => {
-      let finalTranscript = '';
+      let finalText = '';
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
         else interim += event.results[i][0].transcript;
       }
       setInterimText(interim);
-      if (finalTranscript) {
+      if (finalText) {
         setInterimText('');
         updateStatus('processing');
-        onResultRef.current(finalTranscript.trim());
+        onResultRef.current(finalText.trim());
       }
     };
 
@@ -179,31 +178,132 @@ export function useSpeech(onResult: (text: string) => void) {
     try { r.start(); } catch (e: any) {
       if (String(e).includes('not-allowed')) updateStatus('noPermission');
     }
-  }, [buildRecognition, stopAllRecognition, updateStatus]);
+  }, [buildWebRecognition, stopWebRecognition, updateStatus]);
+
+  // ─── NATIVE: Capacitor @capacitor-community/speech-recognition ───────────
+
+  const startNativeWakeListening = useCallback(async () => {
+    const granted = await requestNativeMicPermission();
+    if (!granted) { updateStatus('noPermission'); return; }
+
+    updateStatus('listeningForWake');
+
+    const handleTranscript = (text: string, isFinal: boolean) => {
+      const lower = text.toLowerCase();
+      setInterimText(text);
+
+      if (lower.includes('hey jarvis')) {
+        setInterimText('');
+        updateStatus('wakeDetected');
+        const cleaned = text.replace(/hey\s+jarvis[,.]?\s*/gi, '').trim();
+        if (cleaned.length > 1) {
+          updateStatus('processing');
+          onResultRef.current(cleaned);
+        } else {
+          updateStatus('listeningForCommand');
+        }
+      } else if (isFinal) {
+        setStatus((prev) => {
+          if (prev === 'listeningForCommand') {
+            setInterimText('');
+            updateStatus('processing');
+            onResultRef.current(text.trim());
+            restartTimerRef.current = setTimeout(() => {
+              if (modeRef.current === 'wakeWord') startNativeWakeListening();
+            }, 3000);
+          }
+          return prev;
+        });
+      }
+    };
+
+    await startNativeListening({
+      onPartial: (t) => handleTranscript(t, false),
+      onFinal: (t) => handleTranscript(t, true),
+      onError: (err) => {
+        console.error('Native speech error:', err);
+        updateStatus('error');
+        // Auto-restart in wake mode
+        if (modeRef.current === 'wakeWord') {
+          restartTimerRef.current = setTimeout(() => {
+            if (modeRef.current === 'wakeWord') startNativeWakeListening();
+          }, 1000);
+        }
+      },
+      onEnd: () => {
+        setInterimText('');
+        if (modeRef.current === 'wakeWord') {
+          restartTimerRef.current = setTimeout(() => {
+            if (modeRef.current === 'wakeWord') startNativeWakeListening();
+          }, 400);
+        } else {
+          updateStatus('idle');
+        }
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateStatus]);
+
+  const startNativeManualListening = useCallback(async () => {
+    const granted = await requestNativeMicPermission();
+    if (!granted) { updateStatus('noPermission'); return; }
+
+    updateStatus('listeningForCommand');
+
+    await startNativeListening({
+      onPartial: (t) => setInterimText(t),
+      onFinal: (t) => {
+        setInterimText('');
+        updateStatus('processing');
+        onResultRef.current(t.replace(/^hey\s+jarvis[,.]?\s*/i, '').trim());
+      },
+      onError: () => updateStatus('error'),
+      onEnd: () => { setInterimText(''); updateStatus('idle'); },
+    });
+  }, [updateStatus]);
+
+  // ─── Public API ──────────────────────────────────────────────────────────
 
   const stopListening = useCallback(() => {
     modeRef.current = 'off';
     setMode('off');
-    stopAllRecognition();
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    if (isNative) {
+      stopNativeListening();
+    } else {
+      stopWebRecognition();
+    }
     updateStatus('idle');
-  }, [stopAllRecognition, updateStatus]);
+  }, [isNative, stopWebRecognition, updateStatus]);
 
   const startWakeMode = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setIsSupported(false); updateStatus('notSupported'); return; }
+    if (!isNative) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { setIsSupported(false); updateStatus('notSupported'); return; }
+    }
     modeRef.current = 'wakeWord';
     setMode('wakeWord');
-    startWakeWordListening();
-  }, [startWakeWordListening, updateStatus]);
+    if (isNative) {
+      startNativeWakeListening();
+    } else {
+      startWebWakeListening();
+    }
+  }, [isNative, startNativeWakeListening, startWebWakeListening, updateStatus]);
 
   const startManualMode = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setIsSupported(false); updateStatus('notSupported'); return; }
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    if (!isNative) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { setIsSupported(false); updateStatus('notSupported'); return; }
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    }
     modeRef.current = 'manual';
     setMode('manual');
-    startManualListening();
-  }, [startManualListening, updateStatus]);
+    if (isNative) {
+      startNativeManualListening();
+    } else {
+      startWebManualListening();
+    }
+  }, [isNative, startNativeManualListening, startWebManualListening, updateStatus]);
 
   const speak = useCallback(async (text: string, callback?: () => void) => {
     if (!text) { callback?.(); return; }
@@ -235,13 +335,17 @@ export function useSpeech(onResult: (text: string) => void) {
     }
   }, [updateStatus]);
 
-  // Check support on mount; cleanup on unmount
+  // Support check on mount
   useEffect(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setIsSupported(false); updateStatus('notSupported'); }
+    if (!isNative) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { setIsSupported(false); updateStatus('notSupported'); }
+    }
     return () => {
       modeRef.current = 'off';
-      stopAllRecognition();
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (isNative) stopNativeListening();
+      else stopWebRecognition();
       if (audioRef.current) audioRef.current.pause();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,16 +354,10 @@ export function useSpeech(onResult: (text: string) => void) {
   const isListening = status === 'listeningForWake' || status === 'listeningForCommand' || status === 'wakeDetected';
 
   return {
-    mode,
-    status,
-    isListening,
-    isSupported,
-    interimText,
+    mode, status, isListening, isSupported, interimText,
     statusLabel: STATUS_LABELS[status],
-    startWakeMode,
-    startManualMode,
-    stopListening,
-    speak,
-    updateStatus,
+    isNative,
+    startWakeMode, startManualMode, stopListening,
+    speak, updateStatus,
   };
 }

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy this file over the generated one at:
+  android/app/src/main/AndroidManifest.xml
+  after running: npx cap add android
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Required for voice recognition -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+  <!-- Required for AI/TTS calls to backend -->
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <!-- Allows WebView to use cleartext HTTP during development -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+  <!-- Speech recognizer hardware feature -->
+  <uses-feature android:name="android.hardware.microphone" android:required="true" />
+
+  <application
+    android:allowBackup="true"
+    android:icon="@mipmap/ic_launcher"
+    android:label="@string/app_name"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:supportsRtl="true"
+    android:theme="@style/AppTheme"
+    android:usesCleartextTraffic="true">
+
+    <!-- IMPORTANT: This enables the WebView to use mic for Web Speech API -->
+    <meta-data
+      android:name="com.google.android.webview.features"
+      android:value="UseWebMicrophoneForSpeechRecognition" />
+
+    <activity
+      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+      android:exported="true"
+      android:label="@string/title_activity_main"
+      android:launchMode="singleTask"
+      android:name=".MainActivity"
+      android:theme="@style/AppTheme.NoActionBarLaunch"
+      android:windowSoftInputMode="adjustResize">
+
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+
+    </activity>
+  </application>
+
+</manifest>
