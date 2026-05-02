@@ -10,6 +10,7 @@ import { JarvisMessage } from "@/components/JarvisMessage";
 import { JarvisStatusPanel } from "@/components/JarvisStatusPanel";
 import { VoiceCommandHelp } from "@/components/VoiceCommandHelp";
 import { AppLock } from "@/components/AppLock";
+import { VoiceDiagnosticBanner } from "@/components/VoiceDiagnosticBanner";
 import { processCommand } from "@/services/commandProcessor";
 import { cn } from "@/lib/utils";
 
@@ -156,6 +157,9 @@ export function Jarvis() {
 
         <div className="relative z-10 flex flex-col h-screen max-w-4xl mx-auto w-full px-3 sm:px-6">
           <JarvisHeader />
+
+          {/* Voice diagnostic banner — shown when mic can't work */}
+          <VoiceDiagnosticBanner permissionDenied={status === "noPermission"} />
 
           {/* Status bar */}
           <motion.div
