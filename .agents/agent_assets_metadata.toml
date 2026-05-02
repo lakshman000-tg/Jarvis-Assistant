@@ -6,3 +6,9 @@ id = "wtKezaRZL2aeTjsqdBVPm"
 uri = "file://artifacts/jarvis/sell apk.txt"
 type = "text"
 title = "JARVIS APK Development & Selling Guide"
+
+[[outputs]]
+id = "0eUfAEo8o10VtF_XERwkv"
+uri = "file://.github/workflows/build-jarvis-apk.yml"
+type = "unspecified"
+title = "GitHub Actions — Build JARVIS APK"
