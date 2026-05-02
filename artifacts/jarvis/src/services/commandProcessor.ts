@@ -20,6 +20,30 @@ export interface CommandProcessorCallbacks {
   showHelp: () => void;
 }
 
+/**
+ * Opens a URL reliably across all environments:
+ * - Capacitor APK → _system opens the device's default browser
+ * - Regular browser → programmatic anchor click bypasses popup blockers
+ * - Replit iframe preview → also uses anchor click (may still be sandboxed)
+ */
+function openUrl(url: string): void {
+  // Capacitor native Android/iOS — open in system browser
+  if ((window as any).Capacitor?.isNativePlatform?.()) {
+    (window as any).open(url, '_system', 'location=yes');
+    return;
+  }
+  // Browser: create a real anchor click — bypasses popup blockers
+  // that block window.open() called from async/voice callbacks
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => document.body.removeChild(a), 300);
+}
+
 export function processCommand(
   rawText: string,
   callbacks: CommandProcessorCallbacks
@@ -56,48 +80,65 @@ export function processCommand(
 
   // --- Web & Apps ---
   if (text.match(/\bopen\s+youtube\b/)) {
-    return { response: 'Opening YouTube 🚀', category: 'web', handled: true, action: () => window.open('https://www.youtube.com', '_blank') };
+    return { response: 'Opening YouTube 🚀', category: 'web', handled: true, action: () => openUrl('https://www.youtube.com') };
   }
   if (text.match(/\bopen\s+whatsapp\b/)) {
-    return { response: 'Opening WhatsApp 💬', category: 'web', handled: true, action: () => window.open('https://web.whatsapp.com', '_blank') };
+    return { response: 'Opening WhatsApp 💬', category: 'web', handled: true, action: () => openUrl('https://web.whatsapp.com') };
   }
   if (text.match(/\bopen\s+gmail\b/)) {
-    return { response: 'Opening Gmail 📧', category: 'web', handled: true, action: () => window.open('https://mail.google.com', '_blank') };
+    return { response: 'Opening Gmail 📧', category: 'web', handled: true, action: () => openUrl('https://mail.google.com') };
   }
   if (text.match(/\bopen\s+maps?\b/) || text.match(/\bgoogle\s+maps?\b/)) {
-    return { response: 'Opening Google Maps 🗺️', category: 'web', handled: true, action: () => window.open('https://maps.google.com', '_blank') };
+    return { response: 'Opening Google Maps 🗺️', category: 'web', handled: true, action: () => openUrl('https://maps.google.com') };
   }
   if (text.match(/\bopen\s+instagram\b/)) {
-    return { response: 'Opening Instagram 📸', category: 'web', handled: true, action: () => window.open('https://www.instagram.com', '_blank') };
+    return { response: 'Opening Instagram 📸', category: 'web', handled: true, action: () => openUrl('https://www.instagram.com') };
   }
   if (text.match(/\bopen\s+twitter\b/) || text.match(/\bopen\s+x\b/)) {
-    return { response: 'Opening X (Twitter) 🐦', category: 'web', handled: true, action: () => window.open('https://www.x.com', '_blank') };
+    return { response: 'Opening X (Twitter) 🐦', category: 'web', handled: true, action: () => openUrl('https://www.x.com') };
+  }
+  if (text.match(/\bopen\s+spotify\b/)) {
+    return { response: 'Opening Spotify 🎧', category: 'web', handled: true, action: () => openUrl('https://open.spotify.com') };
+  }
+  if (text.match(/\bopen\s+netflix\b/)) {
+    return { response: 'Opening Netflix 🎬', category: 'web', handled: true, action: () => openUrl('https://www.netflix.com') };
+  }
+  if (text.match(/\bopen\s+google\b/)) {
+    return { response: 'Opening Google 🔍', category: 'web', handled: true, action: () => openUrl('https://www.google.com') };
   }
 
   // --- Google Search ---
   const googleMatch = text.match(/^search\s+(google\s+)?(?:for\s+)?(.+)$/i);
   if (googleMatch) {
     const query = googleMatch[2].trim();
-    return { response: `Searching Google for: ${query} 🔍`, category: 'web', handled: true, action: () => window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank') };
+    return { response: `Searching Google for: ${query} 🔍`, category: 'web', handled: true, action: () => openUrl(`https://www.google.com/search?q=${encodeURIComponent(query)}`) };
   }
   const searchMatch = text.match(/\bsearch\s+(?:for\s+)?(.+)$/i);
   if (searchMatch) {
     const query = searchMatch[1].trim();
-    return { response: `Searching for: ${query} 🔍`, category: 'web', handled: true, action: () => window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank') };
+    return { response: `Searching for: ${query} 🔍`, category: 'web', handled: true, action: () => openUrl(`https://www.google.com/search?q=${encodeURIComponent(query)}`) };
+  }
+
+  // --- YouTube search ---
+  const ytMatch = text.match(/\b(?:play|search|find)\s+(?:on\s+youtube\s+)?(.+?)\s+(?:on\s+youtube|youtube)$/i)
+    || text.match(/\byoutube\s+(?:search\s+)?(.+)$/i);
+  if (ytMatch) {
+    const query = ytMatch[1].trim();
+    return { response: `Searching YouTube for: ${query} 🎬`, category: 'media', handled: true, action: () => openUrl(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`) };
   }
 
   // --- Media ---
   if (text.match(/\bplay\s+music\b/) || text.match(/\bopen\s+music\b/)) {
-    return { response: 'Opening YouTube Music 🎵', category: 'media', handled: true, action: () => window.open('https://music.youtube.com', '_blank') };
+    return { response: 'Opening YouTube Music 🎵', category: 'media', handled: true, action: () => openUrl('https://music.youtube.com') };
   }
   if (text.match(/\bplay\s+telugu\s+love\s+songs?\b/)) {
-    return { response: 'Playing Telugu love songs 💕🎵', category: 'media', handled: true, action: () => window.open('https://www.youtube.com/results?search_query=Telugu+love+songs', '_blank') };
+    return { response: 'Playing Telugu love songs 💕🎵', category: 'media', handled: true, action: () => openUrl('https://www.youtube.com/results?search_query=Telugu+love+songs') };
   }
   if (text.match(/\bplay\s+telugu\s+(songs?|music)\b/)) {
-    return { response: 'Opening Telugu songs 🎵', category: 'media', handled: true, action: () => window.open('https://www.youtube.com/results?search_query=Telugu+songs', '_blank') };
+    return { response: 'Opening Telugu songs 🎵', category: 'media', handled: true, action: () => openUrl('https://www.youtube.com/results?search_query=Telugu+songs') };
   }
   if (text.match(/\bplay\s+(upbeat|party)\b/) || text.match(/\bparty\s+(songs?|music)\b/)) {
-    return { response: 'Time to party! 🎉🎵', category: 'media', handled: true, action: () => window.open('https://www.youtube.com/results?search_query=upbeat+party+songs', '_blank') };
+    return { response: 'Time to party! 🎉🎵', category: 'media', handled: true, action: () => openUrl('https://www.youtube.com/results?search_query=upbeat+party+songs') };
   }
 
   // --- Info ---
