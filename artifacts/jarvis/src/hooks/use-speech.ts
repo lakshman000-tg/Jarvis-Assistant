@@ -49,6 +49,8 @@ export function useSpeech(onResult: (text: string) => void) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const modeRef = useRef<VoiceMode>('off');
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recognitionRunningRef = useRef(false); // true while a session is alive
   const onResultRef = useRef(onResult);
   const wakeListenRef = useRef<() => void>(() => {});
 
@@ -60,6 +62,8 @@ export function useSpeech(onResult: (text: string) => void) {
 
   const stopWebRecognition = useCallback(() => {
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+    recognitionRunningRef.current = false;
     try { recognitionRef.current?.abort(); } catch { /* ignore */ }
     recognitionRef.current = null;
     setInterimText('');
@@ -83,7 +87,10 @@ export function useSpeech(onResult: (text: string) => void) {
     if (!r) { updateStatus('notSupported'); setIsSupported(false); return; }
     recognitionRef.current = r;
 
-    r.onstart = () => updateStatus('listeningForWake');
+    r.onstart = () => {
+      recognitionRunningRef.current = true;
+      updateStatus('listeningForWake');
+    };
 
     r.onresult = (event: any) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -120,23 +127,33 @@ export function useSpeech(onResult: (text: string) => void) {
 
     r.onerror = (event: any) => {
       if (event.error === 'not-allowed') { updateStatus('noPermission'); setIsSupported(false); return; }
-      if (event.error === 'no-speech' || event.error === 'aborted') return;
+      // audio-capture: another audio source (e.g. video) briefly blocks the mic — just restart
+      if (event.error === 'audio-capture' || event.error === 'no-speech' || event.error === 'aborted') return;
       updateStatus('error');
     };
 
     r.onend = () => {
+      recognitionRunningRef.current = false;
       setInterimText('');
       if (modeRef.current === 'wakeWord') {
+        // Fast restart — 100ms keeps the gap unnoticeable to the user
         restartTimerRef.current = setTimeout(() => {
           if (modeRef.current === 'wakeWord') wakeListenRef.current();
-        }, 400);
+        }, 100);
       } else {
         updateStatus('idle');
       }
     };
 
     try { r.start(); } catch (e: any) {
+      recognitionRunningRef.current = false;
       if (String(e).includes('not-allowed')) updateStatus('noPermission');
+      // start() can throw if the page lost focus; schedule a retry
+      if (modeRef.current === 'wakeWord') {
+        restartTimerRef.current = setTimeout(() => {
+          if (modeRef.current === 'wakeWord') wakeListenRef.current();
+        }, 500);
+      }
     }
   }, [buildWebRecognition, stopWebRecognition, updateStatus]);
 
@@ -287,6 +304,27 @@ export function useSpeech(onResult: (text: string) => void) {
       startNativeWakeListening();
     } else {
       startWebWakeListening();
+
+      // ── Heartbeat: every 2s, if we're in wake mode but recognition died, revive it ──
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      heartbeatRef.current = setInterval(() => {
+        if (modeRef.current === 'wakeWord' && !recognitionRunningRef.current) {
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          wakeListenRef.current();
+        }
+      }, 2000);
+
+      // ── Focus listener: restart when the main page regains focus from the iframe ──
+      const onFocus = () => {
+        if (modeRef.current === 'wakeWord' && !recognitionRunningRef.current) {
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          wakeListenRef.current();
+        }
+      };
+      window.addEventListener('focus', onFocus);
+      // Store cleanup on the ref so stopListening can remove it
+      (startWakeMode as any)._focusCleanup?.();
+      (startWakeMode as any)._focusCleanup = () => window.removeEventListener('focus', onFocus);
     }
   }, [isNative, startNativeWakeListening, startWebWakeListening, updateStatus]);
 
