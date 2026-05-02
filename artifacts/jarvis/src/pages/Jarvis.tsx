@@ -343,57 +343,81 @@ export function Jarvis() {
             </AnimatePresence>
           </div>
 
-          {/* Controls */}
-          <div className="mt-4 mb-5 flex flex-col items-center gap-3">
-            <div className="flex items-center justify-center gap-3 flex-wrap w-full">
+          {/* Controls — all in one row with the text input */}
+          <div className="mt-3 mb-4 space-y-1.5">
+            <form onSubmit={handleSubmitText} className="w-full flex items-center gap-1.5 bg-jarvis-dark/80 border border-jarvis-cyan/20 rounded-xl px-2 py-1.5 focus-within:border-jarvis-cyan/50 transition-colors">
+              {/* Hey JARVIS toggle */}
               <button
+                type="button"
                 onClick={handleWakeToggle}
                 disabled={!isSupported || !isSystemOnline}
+                title={mode === "wakeWord" ? "Hey JARVIS: ON — click to stop" : "Activate Hey JARVIS wake word"}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-xs font-display tracking-widest uppercase border rounded transition-all",
+                  "flex items-center gap-1.5 px-3 py-2 text-[10px] font-display tracking-widest uppercase border rounded-lg transition-all flex-shrink-0",
                   mode === "wakeWord"
-                    ? "border-jarvis-cyan bg-jarvis-cyan/10 text-jarvis-cyan shadow-[0_0_15px_rgba(0,255,255,0.3)]"
-                    : "border-jarvis-cyan/30 text-jarvis-cyan-dark hover:border-jarvis-cyan hover:text-jarvis-cyan",
+                    ? "border-jarvis-cyan bg-jarvis-cyan/10 text-jarvis-cyan shadow-[0_0_10px_rgba(0,255,255,0.25)]"
+                    : "border-jarvis-cyan/25 text-jarvis-cyan-dark hover:border-jarvis-cyan hover:text-jarvis-cyan",
                   (!isSupported || !isSystemOnline) && "opacity-40 cursor-not-allowed"
                 )}
               >
-                <Radio className={cn("w-4 h-4", mode === "wakeWord" && "animate-pulse")} />
-                {mode === "wakeWord" ? "Hey JARVIS: ON" : "Hey JARVIS"}
+                <Radio className={cn("w-3.5 h-3.5 flex-shrink-0", mode === "wakeWord" && "animate-pulse")} />
+                <span className="hidden sm:inline">{mode === "wakeWord" ? "On" : "Hey JARVIS"}</span>
               </button>
 
-              <JarvisMic
-                isListening={isListening && mode === "manual"}
+              {/* Text input */}
+              <div className="flex-1 relative flex items-center">
+                <Terminal size={15} className="absolute left-2 text-jarvis-cyan/40 pointer-events-none" />
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder="Type a command or say Hey JARVIS..."
+                  disabled={!isSystemOnline}
+                  className="w-full bg-transparent text-jarvis-cyan placeholder:text-jarvis-cyan-dark/40 font-body pl-7 pr-2 py-1.5 focus:outline-none text-sm disabled:opacity-50"
+                />
+              </div>
+
+              {/* Manual mic */}
+              <button
+                type="button"
                 onClick={mode === "manual" ? stopListening : startManualMode}
                 disabled={!isSupported || !isSystemOnline}
-              />
+                title="Manual voice input"
+                className={cn(
+                  "p-2 rounded-lg border transition-all flex-shrink-0",
+                  isListening && mode === "manual"
+                    ? "border-jarvis-cyan bg-jarvis-cyan/15 text-jarvis-cyan shadow-[0_0_10px_rgba(0,255,255,0.3)]"
+                    : "border-jarvis-cyan/20 text-jarvis-cyan-dark hover:border-jarvis-cyan hover:text-jarvis-cyan",
+                  (!isSupported || !isSystemOnline) && "opacity-40 cursor-not-allowed"
+                )}
+              >
+                <Radio className={cn("w-4 h-4", isListening && mode === "manual" && "animate-pulse")} />
+              </button>
 
-              {mode !== "off" && (
-                <button onClick={stopListening} className="flex items-center gap-2 px-4 py-2.5 text-xs font-display tracking-widest uppercase border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded transition-all">
-                  <Power className="w-4 h-4" /> Stop
+              {/* Stop (only when active) or Send */}
+              {mode !== "off" ? (
+                <button
+                  type="button"
+                  onClick={stopListening}
+                  title="Stop listening"
+                  className="p-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0"
+                >
+                  <Power className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!textInput.trim() || !isSystemOnline}
+                  className="p-2 text-jarvis-cyan-dark hover:text-jarvis-cyan disabled:opacity-30 transition-colors flex-shrink-0"
+                >
+                  <Send size={18} />
                 </button>
               )}
-            </div>
-
-            <form onSubmit={handleSubmitText} className="w-full max-w-2xl relative flex items-center group">
-              <div className="absolute left-4 text-jarvis-cyan/50 group-focus-within:text-jarvis-cyan transition-colors">
-                <Terminal size={18} />
-              </div>
-              <input
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                placeholder='Type "Hey JARVIS, open youtube" to test...'
-                disabled={!isSystemOnline}
-                className="w-full bg-jarvis-dark/80 border-b-2 border-t-0 border-x-0 border-jarvis-cyan/30 text-jarvis-cyan placeholder:text-jarvis-cyan-dark/50 font-body px-12 py-3 focus:outline-none focus:border-jarvis-cyan focus:bg-jarvis-dark transition-all text-sm disabled:opacity-50"
-              />
-              <button type="submit" disabled={!textInput.trim() || !isSystemOnline} className="absolute right-2 p-2 text-jarvis-cyan-dark hover:text-jarvis-cyan disabled:opacity-40 transition-colors">
-                <Send size={20} />
-              </button>
             </form>
 
             {!isSupported && (
-              <p className="text-yellow-500/70 text-[10px] font-display tracking-widest text-center">
-                Voice recognition unavailable in this browser. Use text input above.
+              <p className="text-yellow-500/60 text-[10px] font-display tracking-widest text-center">
+                Voice unavailable in this browser — use text input
               </p>
             )}
           </div>
