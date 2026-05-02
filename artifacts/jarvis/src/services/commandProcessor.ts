@@ -80,6 +80,16 @@ export function processCommand(
   }
 
   // --- Web & Apps ---
+  // "open youtube and play X" / "open youtube play X" — embedded player wins
+  const openYtPlay =
+    text.match(/\bopen\s+youtube\s+and\s+play\s+(.+)$/i) ||
+    text.match(/\bopen\s+youtube\s+play\s+(.+)$/i) ||
+    text.match(/\byoutube\s+and\s+play\s+(.+)$/i);
+  if (openYtPlay) {
+    const query = openYtPlay[1].trim();
+    const embedUrl = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1`;
+    return { response: `Playing "${query}" on YouTube 🎬`, category: 'media', handled: true, action: () => callbacks.playMedia(embedUrl, query) };
+  }
   if (text.match(/\bopen\s+youtube\b/)) {
     return { response: 'Opening YouTube 🚀', category: 'web', handled: true, action: () => openUrl('https://www.youtube.com') };
   }
