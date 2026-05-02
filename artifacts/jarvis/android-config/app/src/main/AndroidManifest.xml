@@ -6,16 +6,24 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-  <!-- Required for voice recognition -->
+  <!-- Voice recognition -->
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-  <!-- Required for AI/TTS calls to backend -->
+  <!-- Internet (AI/TTS backend calls) -->
   <uses-permission android:name="android.permission.INTERNET" />
-
-  <!-- Allows WebView to use cleartext HTTP during development -->
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-  <!-- Speech recognizer hardware feature -->
+  <!-- Foreground service — keeps JARVIS alive while app minimized -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+  <!-- Persistent notification for foreground service -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <!-- Partial wake lock — keeps CPU alive (screen ON) -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <!-- Mic hardware requirement -->
   <uses-feature android:name="android.hardware.microphone" android:required="true" />
 
   <application
@@ -27,7 +35,7 @@
     android:theme="@style/AppTheme"
     android:usesCleartextTraffic="true">
 
-    <!-- IMPORTANT: This enables the WebView to use mic for Web Speech API -->
+    <!-- Enables WebView mic for Web Speech API -->
     <meta-data
       android:name="com.google.android.webview.features"
       android:value="UseWebMicrophoneForSpeechRecognition" />
@@ -45,8 +53,15 @@
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
-
     </activity>
+
+    <!-- Foreground listener service -->
+    <service
+      android:name=".ForegroundListenerService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="microphone" />
+
   </application>
 
 </manifest>

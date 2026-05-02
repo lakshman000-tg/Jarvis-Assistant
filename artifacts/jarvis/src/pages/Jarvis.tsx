@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Terminal, HelpCircle, Radio, Power } from "lucide-react";
+import { Send, Terminal, HelpCircle, Radio, Power, Settings as SettingsIcon } from "lucide-react";
 import { useCreateOpenaiConversation } from "@workspace/api-client-react";
 import { useJarvisChat } from "@/hooks/use-jarvis-chat";
 import { useSpeech } from "@/hooks/use-speech";
@@ -11,15 +11,28 @@ import { JarvisStatusPanel } from "@/components/JarvisStatusPanel";
 import { VoiceCommandHelp } from "@/components/VoiceCommandHelp";
 import { AppLock } from "@/components/AppLock";
 import { VoiceDiagnosticBanner } from "@/components/VoiceDiagnosticBanner";
+import { VoiceStatusDot } from "@/components/VoiceStatusDot";
+import { Settings } from "@/pages/Settings";
 import { processCommand } from "@/services/commandProcessor";
+import {
+  loadSettings,
+  loadProfile,
+  verifyVoice,
+} from "@/services/voiceProfileService";
+import {
+  startForegroundListener,
+  stopForegroundListener,
+  isListenerServiceRunning,
+} from "@/services/foregroundListenerService";
 import { cn } from "@/lib/utils";
 
-type AppView = "chat" | "dashboard" | "commands";
+type AppView = "chat" | "dashboard" | "commands" | "settings";
 
 const TABS: { id: AppView; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "dashboard", label: "Dashboard" },
   { id: "commands", label: "Commands" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function Jarvis() {
@@ -34,7 +47,9 @@ export function Jarvis() {
   const [showHelp, setShowHelp] = useState(false);
   const [appLocked, setAppLocked] = useState(false);
 
-  // Stable ref so speech callback can always call the latest processInput
+  const [serviceRunning, setServiceRunning] = useState(isListenerServiceRunning);
+  const [screenActive, setScreenActive] = useState(document.visibilityState === "visible");
+
   const processInputRef = useRef<(text: string) => void>(() => {});
 
   const { mutateAsync: createConv } = useCreateOpenaiConversation();
@@ -51,6 +66,13 @@ export function Jarvis() {
     speak, updateStatus,
   } = useSpeech(onSpeechResult);
 
+  // Screen visibility tracking
+  useEffect(() => {
+    const handler = () => setScreenActive(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
+
   const respondWith = useCallback((response: string, originalInput: string) => {
     setLastCommand(originalInput);
     setLastResponse(response);
@@ -59,61 +81,87 @@ export function Jarvis() {
     speak(response);
   }, [addMessage, speak]);
 
+  // ── Voice profile guard ─────────────────────────────────────────────────
+  const guardVoiceProfile = useCallback(async (rawText: string, proceed: () => void) => {
+    const settings = loadSettings();
+    if (!settings.ownerOnlyMode || !loadProfile()) {
+      proceed();
+      return;
+    }
+    try {
+      updateStatus("processing");
+      const result = await verifyVoice(settings);
+      if (result.authorized) {
+        speak("Voice recognized.");
+        setTimeout(proceed, 800);
+      } else {
+        respondWith("Unauthorized voice detected. Command rejected.", rawText);
+      }
+    } catch {
+      proceed(); // fail open on error
+    }
+  }, [respondWith, speak, updateStatus]);
+
   const processInput = useCallback((rawText: string) => {
     if (!rawText.trim() || !isSystemOnline) return;
 
-    const result = processCommand(rawText, {
-      navigate: (v) => setView(v as AppView),
-      lockApp: () => setAppLocked(true),
-      logout: () => {
-        const msg = "Session terminated. Goodbye! 👋";
-        addMessage("user", rawText);
-        addMessage("assistant", msg);
-        setLastCommand(rawText);
-        setLastResponse(msg);
-        speak(msg);
-        setTimeout(() => {
-          setIsSystemOnline(false);
-          setConvId(null);
-        }, 2500);
-      },
-      showHelp: () => setShowHelp(true),
-    });
-
-    if (result.handled) {
-      result.action();
-      // For logout, messaging is handled inline above
-      if (!rawText.toLowerCase().replace(/^hey\s+jarvis[,.]?\s*/i, '').match(/\blog\s*(out|off)\b|\bsign\s*out\b/)) {
-        respondWith(result.response, rawText);
-      }
-    } else {
-      // Send to JARVIS AI
-      updateStatus("processing");
-      setLastCommand(rawText);
-      askJarvis(rawText.replace(/^hey\s+jarvis[,.]?\s*/i, '').trim(), (aiResponse) => {
-        setLastResponse(aiResponse);
-        speak(aiResponse);
+    const execute = () => {
+      const result = processCommand(rawText, {
+        navigate: (v) => {
+          if (v === "settings") setView("settings");
+          else setView(v as AppView);
+        },
+        lockApp: () => setAppLocked(true),
+        logout: () => {
+          const msg = "Session terminated. Goodbye!";
+          addMessage("user", rawText);
+          addMessage("assistant", msg);
+          setLastCommand(rawText);
+          setLastResponse(msg);
+          speak(msg);
+          setTimeout(() => { setIsSystemOnline(false); setConvId(null); }, 2500);
+        },
+        showHelp: () => setShowHelp(true),
       });
-    }
-  }, [isSystemOnline, respondWith, askJarvis, speak, addMessage, updateStatus]);
+
+      if (result.handled) {
+        result.action();
+        if (!rawText.toLowerCase().replace(/^hey\s+jarvis[,.]?\s*/i, '').match(/\blog\s*(out|off)\b|\bsign\s*out\b/)) {
+          respondWith(result.response, rawText);
+        }
+      } else {
+        updateStatus("processing");
+        setLastCommand(rawText);
+        askJarvis(rawText.replace(/^hey\s+jarvis[,.]?\s*/i, '').trim(), (aiResponse) => {
+          setLastResponse(aiResponse);
+          speak(aiResponse);
+        });
+      }
+    };
+
+    guardVoiceProfile(rawText, execute);
+  }, [isSystemOnline, respondWith, askJarvis, speak, addMessage, updateStatus, guardVoiceProfile]);
 
   useEffect(() => { processInputRef.current = processInput; }, [processInput]);
 
-  // Init conversation
+  // Init conversation + auto-start if configured
   useEffect(() => {
     createConv({ data: { title: "JARVIS Session" } })
       .then((res) => {
         setConvId(res.id);
         setIsSystemOnline(true);
-        addMessage("system", "System online. JARVIS is ready. Say \"Hey JARVIS\" or type a command.");
+        addMessage("system", 'System online. JARVIS is ready. Say "Hey JARVIS" or type a command.');
+        const s = loadSettings();
+        if (s.autoStart) setTimeout(() => startWakeMode(), 500);
+        if (s.backgroundListening) {
+          startForegroundListener().then(() => setServiceRunning(true));
+        }
       })
-      .catch(() => {
-        addMessage("system", "ERROR: Failed to connect to JARVIS core.");
-      });
+      .catch(() => addMessage("system", "ERROR: Failed to connect to JARVIS core."));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-scroll
+  // Auto-scroll chat
   useEffect(() => {
     if (chatScrollRef.current && view === "chat") {
       chatScrollRef.current.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
@@ -122,9 +170,17 @@ export function Jarvis() {
 
   const handleSubmitText = (e: React.FormEvent) => {
     e.preventDefault();
-    if (textInput.trim()) {
-      processInput(textInput);
-      setTextInput("");
+    if (textInput.trim()) { processInput(textInput); setTextInput(""); }
+  };
+
+  const handleWakeToggle = async () => {
+    if (mode === "wakeWord") {
+      stopListening();
+      if (serviceRunning) { await stopForegroundListener(); setServiceRunning(false); }
+    } else {
+      startWakeMode();
+      const s = loadSettings();
+      if (s.backgroundListening) { await startForegroundListener(); setServiceRunning(true); }
     }
   };
 
@@ -158,7 +214,6 @@ export function Jarvis() {
         <div className="relative z-10 flex flex-col h-screen max-w-4xl mx-auto w-full px-3 sm:px-6">
           <JarvisHeader />
 
-          {/* Voice diagnostic banner — shown when mic can't work */}
           <VoiceDiagnosticBanner permissionDenied={status === "noPermission"} />
 
           {/* Status bar */}
@@ -166,7 +221,7 @@ export function Jarvis() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className={cn(
-              "flex items-center justify-between px-3 py-2 mb-2 rounded border text-xs font-display tracking-widest uppercase transition-colors",
+              "flex items-center justify-between px-3 py-2 mb-1 rounded border text-xs font-display tracking-widest uppercase transition-colors",
               statusColorClass
             )}
           >
@@ -181,11 +236,17 @@ export function Jarvis() {
             <button
               onClick={() => setShowHelp(true)}
               className="hover:opacity-80 transition-opacity flex-shrink-0 ml-2"
-              aria-label="Command help"
             >
               <HelpCircle className="w-4 h-4" />
             </button>
           </motion.div>
+
+          {/* Foreground service status dot */}
+          {serviceRunning && (
+            <div className="mb-1 px-1">
+              <VoiceStatusDot running={serviceRunning} screenActive={screenActive} />
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex gap-0 mb-3 border-b border-jarvis-cyan/10">
@@ -194,12 +255,13 @@ export function Jarvis() {
                 key={tab.id}
                 onClick={() => setView(tab.id)}
                 className={cn(
-                  "flex-1 py-2 text-xs font-display tracking-[0.2em] uppercase transition-all border-b-2 -mb-px",
+                  "flex-1 py-2 text-[10px] font-display tracking-[0.15em] uppercase transition-all border-b-2 -mb-px flex items-center justify-center gap-1",
                   view === tab.id
                     ? "border-jarvis-cyan text-jarvis-cyan"
                     : "border-transparent text-jarvis-cyan-dark hover:text-jarvis-cyan"
                 )}
               >
+                {tab.id === "settings" && <SettingsIcon className="w-3 h-3" />}
                 {tab.label}
               </button>
             ))}
@@ -208,30 +270,19 @@ export function Jarvis() {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
+
               {/* CHAT */}
               {view === "chat" && (
-                <motion.div
-                  key="chat"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="h-full flex flex-col"
-                >
+                <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="h-full flex flex-col">
                   <div
                     ref={chatScrollRef}
                     className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md hud-clip shadow-[inset_0_0_20px_rgba(0,255,255,0.05)]"
                   >
                     <AnimatePresence initial={false}>
                       {messages.map((msg) => <JarvisMessage key={msg.id} {...msg} />)}
-                      {isAnalyzing && (
-                        <JarvisMessage key="analyzing" role="assistant" content="JARVIS is analyzing..." isStreaming />
-                      )}
+                      {isAnalyzing && <JarvisMessage key="analyzing" role="assistant" content="JARVIS is analyzing..." isStreaming />}
                       {interimText && (
-                        <motion.div
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                          className="flex justify-end my-2"
-                        >
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex justify-end my-2">
                           <div className="text-jarvis-cyan-dark font-body italic text-sm">{interimText}...</div>
                         </motion.div>
                       )}
@@ -242,36 +293,15 @@ export function Jarvis() {
 
               {/* DASHBOARD */}
               {view === "dashboard" && (
-                <motion.div
-                  key="dashboard"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md"
-                >
-                  <JarvisStatusPanel
-                    voiceStatus={status}
-                    voiceMode={mode}
-                    lastCommand={lastCommand}
-                    lastResponse={lastResponse}
-                  />
+                <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md">
+                  <JarvisStatusPanel voiceStatus={status} voiceMode={mode} lastCommand={lastCommand} lastResponse={lastResponse} />
                 </motion.div>
               )}
 
               {/* COMMANDS */}
               {view === "commands" && (
-                <motion.div
-                  key="commands"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md p-4 space-y-4"
-                >
-                  <p className="text-[10px] font-display tracking-[0.3em] text-jarvis-cyan-dark uppercase">
-                    Quick Action Buttons
-                  </p>
+                <motion.div key="commands" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md p-4 space-y-4">
+                  <p className="text-[10px] font-display tracking-[0.3em] text-jarvis-cyan-dark uppercase">Quick Action Buttons</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { label: "Open YouTube 🚀", cmd: "open youtube" },
@@ -285,7 +315,7 @@ export function Jarvis() {
                       { label: "Lock App 🔐", cmd: "lock app" },
                       { label: "Help 📖", cmd: "help" },
                       { label: "Open Home 🏠", cmd: "open home" },
-                      { label: "Open Settings ⚙️", cmd: "open settings" },
+                      { label: "Settings ⚙️", cmd: "open settings" },
                     ].map(({ label, cmd }) => (
                       <button
                         key={cmd}
@@ -297,25 +327,27 @@ export function Jarvis() {
                       </button>
                     ))}
                   </div>
-
-                  <button
-                    onClick={() => setShowHelp(true)}
-                    className="w-full bg-jarvis-cyan/5 border border-jarvis-cyan/30 text-jarvis-cyan text-xs font-display tracking-[0.2em] uppercase py-3 rounded hover:bg-jarvis-cyan/10 transition-all flex items-center justify-center gap-2"
-                  >
+                  <button onClick={() => setShowHelp(true)} className="w-full bg-jarvis-cyan/5 border border-jarvis-cyan/30 text-jarvis-cyan text-xs font-display tracking-[0.2em] uppercase py-3 rounded hover:bg-jarvis-cyan/10 transition-all flex items-center justify-center gap-2">
                     <HelpCircle className="w-4 h-4" /> View All Voice Commands
                   </button>
                 </motion.div>
               )}
+
+              {/* SETTINGS */}
+              {view === "settings" && (
+                <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="h-full overflow-y-auto rounded-xl border border-jarvis-cyan/20 bg-black/40 backdrop-blur-md">
+                  <Settings onAutoStart={startWakeMode} />
+                </motion.div>
+              )}
+
             </AnimatePresence>
           </div>
 
           {/* Controls */}
           <div className="mt-4 mb-5 flex flex-col items-center gap-3">
-            {/* Wake word + mic row */}
             <div className="flex items-center justify-center gap-3 flex-wrap w-full">
-              {/* Continuous "Hey JARVIS" mode */}
               <button
-                onClick={mode === "wakeWord" ? stopListening : startWakeMode}
+                onClick={handleWakeToggle}
                 disabled={!isSupported || !isSystemOnline}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 text-xs font-display tracking-widest uppercase border rounded transition-all",
@@ -329,7 +361,6 @@ export function Jarvis() {
                 {mode === "wakeWord" ? "Hey JARVIS: ON" : "Hey JARVIS"}
               </button>
 
-              {/* Manual one-shot mic */}
               <JarvisMic
                 isListening={isListening && mode === "manual"}
                 onClick={mode === "manual" ? stopListening : startManualMode}
@@ -337,16 +368,12 @@ export function Jarvis() {
               />
 
               {mode !== "off" && (
-                <button
-                  onClick={stopListening}
-                  className="flex items-center gap-2 px-4 py-2.5 text-xs font-display tracking-widest uppercase border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded transition-all"
-                >
+                <button onClick={stopListening} className="flex items-center gap-2 px-4 py-2.5 text-xs font-display tracking-widest uppercase border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded transition-all">
                   <Power className="w-4 h-4" /> Stop
                 </button>
               )}
             </div>
 
-            {/* Test text input */}
             <form onSubmit={handleSubmitText} className="w-full max-w-2xl relative flex items-center group">
               <div className="absolute left-4 text-jarvis-cyan/50 group-focus-within:text-jarvis-cyan transition-colors">
                 <Terminal size={18} />
@@ -359,18 +386,14 @@ export function Jarvis() {
                 disabled={!isSystemOnline}
                 className="w-full bg-jarvis-dark/80 border-b-2 border-t-0 border-x-0 border-jarvis-cyan/30 text-jarvis-cyan placeholder:text-jarvis-cyan-dark/50 font-body px-12 py-3 focus:outline-none focus:border-jarvis-cyan focus:bg-jarvis-dark transition-all text-sm disabled:opacity-50"
               />
-              <button
-                type="submit"
-                disabled={!textInput.trim() || !isSystemOnline}
-                className="absolute right-2 p-2 text-jarvis-cyan-dark hover:text-jarvis-cyan disabled:opacity-40 transition-colors"
-              >
+              <button type="submit" disabled={!textInput.trim() || !isSystemOnline} className="absolute right-2 p-2 text-jarvis-cyan-dark hover:text-jarvis-cyan disabled:opacity-40 transition-colors">
                 <Send size={20} />
               </button>
             </form>
 
             {!isSupported && (
               <p className="text-yellow-500/70 text-[10px] font-display tracking-widest text-center">
-                ⚠ Voice recognition unavailable in this browser. Use the text input above to test commands.
+                Voice recognition unavailable in this browser. Use text input above.
               </p>
             )}
           </div>

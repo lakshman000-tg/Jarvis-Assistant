@@ -1,0 +1,116 @@
+Upgrade JARVIS voice assistant with a realistic Android foreground listening system using Capacitor + Android native support.
+
+IMPORTANT:
+Do NOT fake always-on voice recognition.
+Do NOT claim lock-screen wake-word support.
+Implement only what is technically possible for normal Android apps.
+
+GOAL:
+Keep JARVIS listening while:
+
+* App is open
+* App is minimized/recent apps
+* Screen is ON
+
+Show a persistent Android notification:
+“JARVIS is listening…”
+
+FEATURES TO ADD:
+
+1. FOREGROUND SERVICE
+
+* Create Android foreground service for voice listening
+* Service should remain active while app is running in background
+* Show persistent notification in status bar
+* Notification text:
+  “JARVIS is active”
+  “Tap to open assistant”
+
+2. BACKGROUND LISTENING
+
+* Continue speech recognition while:
+
+  * App minimized
+  * User switches apps
+  * Screen still ON
+* Pause automatically when:
+
+  * Screen turns OFF
+  * Phone locks
+  * Battery saver kills background activity
+
+3. WAKE WORD
+
+* Detect:
+  “Hey Jarvis”
+* Only while foreground service is active
+* After detection:
+
+  * Play activation sound
+  * Open assistant UI
+  * Start command listening
+
+4. UI SETTINGS
+   Add settings page:
+
+* Enable background listening
+* Enable wake sound
+* Auto-start listening on app open
+* Show service status
+
+5. STATUS INDICATOR
+   Show:
+
+* Green dot = Listening
+* Red dot = Stopped
+* Text:
+  “Foreground listening active”
+
+6. ANDROID PERMISSIONS
+   Handle:
+
+* RECORD_AUDIO
+* FOREGROUND_SERVICE
+* POST_NOTIFICATIONS
+* WAKE_LOCK
+
+7. IMPORTANT LIMITATIONS
+   Inside app settings include:
+   “Due to Android security restrictions, JARVIS cannot listen when the screen is fully off or the phone is locked like Google Assistant.”
+
+8. TECH STACK
+   Use:
+
+* Capacitor
+* Android foreground service
+* Web Speech API / SpeechRecognition
+* Capacitor Local Notifications
+* Capacitor App plugin
+* Capacitor Background Task if needed
+
+9. PERFORMANCE
+
+* Avoid battery drain
+* Stop microphone when inactive
+* Restart recognition automatically on timeout
+* Prevent duplicate recognition sessions
+
+10. UX
+
+* Smooth transitions
+* Modern AI assistant UI
+* Floating microphone animation while listening
+* Persistent notification opens app directly
+
+OUTPUT:
+Provide complete working implementation including:
+
+* Android service setup
+* Capacitor configuration
+* Permissions
+* React/TypeScript code
+* Notification handling
+* Voice listener lifecycle
+* Background handling
+* Wake-word detection logic
+* Error recovery

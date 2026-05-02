@@ -1,0 +1,78 @@
+Add local speaker voice recognition / voice profile feature to JARVIS.
+
+Goal:
+JARVIS should respond only to the registered owner voice as much as possible.
+
+Important:
+Do not claim this is 100% secure biometric authentication.
+This should be a demo-level local voice profile / speaker verification system.
+
+Feature flow:
+
+1. Voice enrollment
+- Add “Register My Voice” screen.
+- Ask user to speak 3 sample phrases:
+  - “Hey Jarvis, this is my voice”
+  - “Jarvis, recognize me”
+  - “Only respond to my voice”
+- Store voice profile locally on device.
+
+2. Local storage
+- Store voice profile data in local storage / IndexedDB.
+- Do not send voice samples to backend.
+- Add option:
+  - Delete voice profile
+  - Re-record voice profile
+
+3. Voice matching
+- When wake word “Hey Jarvis” is detected:
+  - Compare current voice with stored owner voice profile.
+  - If voice matches:
+    - Accept command.
+    - Say: “Voice recognized.”
+  - If voice does not match:
+    - Reject command.
+    - Say: “Unauthorized voice.”
+    - Do not execute command.
+
+4. Demo implementation
+Because browser/WebView voice APIs do not provide true speaker biometric matching directly:
+- Implement basic local voice fingerprinting using available audio features:
+  - pitch range
+  - speaking energy
+  - frequency profile
+  - audio amplitude pattern
+  - MFCC-like simple feature approximation if possible
+- Compare similarity score.
+- Show match percentage in UI.
+
+5. Settings
+Add:
+- Enable owner voice only mode
+- Register voice
+- Test voice recognition
+- Delete voice profile
+- Sensitivity slider:
+  - Low
+  - Medium
+  - High
+
+6. UI
+Show:
+- Voice profile status: Registered / Not registered
+- Last voice match score
+- Authorized / Unauthorized result
+
+7. Limitations message
+Add clearly in app:
+“Local voice recognition is demo-level and not a secure biometric system. For real speaker verification, native Android ML or cloud speaker recognition is required.”
+
+8. Important
+- Keep everything local.
+- Do not break existing Hey Jarvis wake command.
+- Do not break command processor.
+- If voice profile is not registered, allow normal Jarvis usage.
+- If owner voice only mode is ON and profile is missing, ask user to register voice first.
+
+Expected result:
+JARVIS can store the owner’s voice profile locally and only respond when the detected voice is similar enough to the registered voice.
