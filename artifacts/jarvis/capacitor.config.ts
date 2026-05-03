@@ -1,17 +1,22 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'com.jarvis.assistant',
-  appName: 'JARVIS',
-  webDir: 'dist/public',
+  appId: "com.jarvis.assistant",
+  appName: "JARVIS",
+  webDir: "dist/public",
 
   server: {
     // Allow the WebView to reach your deployed backend for AI/TTS calls.
     // Replace with your actual Replit deployment URL after publishing.
     // During local APK testing you can use your machine's IP, e.g. "http://192.168.1.x:8080"
-    url: 'https://your-replit-deployment.replit.app',
-    cleartext: true,   // allow HTTP during dev; remove for production
-    allowNavigation: ['*.google.com', '*.youtube.com', '*.whatsapp.com', '*.instagram.com'],
+    url: "https://your-replit-deployment.replit.app",
+    cleartext: true, // allow HTTP during dev; remove for production
+    allowNavigation: [
+      "*.google.com",
+      "*.youtube.com",
+      "*.whatsapp.com",
+      "*.instagram.com",
+    ],
   },
 
   android: {
@@ -25,7 +30,7 @@ const config: CapacitorConfig = {
   plugins: {
     SpeechRecognition: {
       // Native Android speech engine settings
-      language: 'en-US',
+      language: "en-US",
       maxResults: 5,
       partialResults: true,
       popup: false,
