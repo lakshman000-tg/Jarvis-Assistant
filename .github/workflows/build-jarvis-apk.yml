@@ -37,7 +37,7 @@ jobs:
         run: pnpm --filter @workspace/jarvis run build    
 
       - name: Sync Capacitor
-      run: pnpm exec cap sync android
+        run: pnpm exec cap sync android
 
       - name: Build APK
         run: |
