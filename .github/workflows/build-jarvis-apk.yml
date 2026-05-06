@@ -1,146 +1,47 @@
-name: Build JARVIS Android APK
+name: Build Android APK
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'artifacts/jarvis/**'
-      - '.github/workflows/build-jarvis-apk.yml'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'artifacts/jarvis/**'
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  build-apk:
-    name: Build Debug APK
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout ─────────────────────────────────────────────────────
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ── 2. Node.js 20 ───────────────────────────────────────────────────
-      - name: Set up Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
-      # ── 3. pnpm ─────────────────────────────────────────────────────────
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
-          run_install: false
-
-      - name: Get pnpm store path
-        id: pnpm-cache
-        run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.store }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      # ── 4. JDK 17 ───────────────────────────────────────────────────────
-      - name: Set up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: 17
 
-      # ── 5. Android SDK ──────────────────────────────────────────────────
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Dependencies
+        run: npm install
 
-      - name: Install Android SDK platform & build tools
-        run: |
-          sdkmanager --update
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Build Web App
+        run: npm run build
 
-      # ── 6. Install JS dependencies ──────────────────────────────────────
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # ── 7. Build Vite web bundle ────────────────────────────────────────
-      - name: Build web app
-        working-directory: artifacts/jarvis
-        env:
-          BASE_PATH: /
-          NODE_ENV: production
-        run: pnpm build
-
-      # ── 8. Capacitor: add android (if not already committed) ────────────
-      - name: Add Android platform if missing
-        working-directory: artifacts/jarvis
-        run: |
-          if [ ! -d "android" ]; then
-            echo "Android directory not found — running cap add android"
-            npx cap add android
-
-            # Apply microphone permission patches
-            echo "Applying AndroidManifest patch..."
-            cp android-config/app/src/main/AndroidManifest.xml \
-               android/app/src/main/AndroidManifest.xml
-
-            echo "Applying MainActivity patch..."
-            mkdir -p android/app/src/main/java/com/jarvis/assistant/
-            cp android-config/MainActivity.java \
-               android/app/src/main/java/com/jarvis/assistant/MainActivity.java
-          else
-            echo "Android directory exists, skipping cap add"
-          fi
-
-      # ── 9. Capacitor sync ───────────────────────────────────────────────
       - name: Sync Capacitor
-        working-directory: artifacts/jarvis
         run: npx cap sync android
 
-      # ── 10. Gradle cache ────────────────────────────────────────────────
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('artifacts/jarvis/android/**/*.gradle*', 'artifacts/jarvis/android/**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      # ── 11. Make Gradle wrapper executable ──────────────────────────────
-      - name: Make gradlew executable
-        working-directory: artifacts/jarvis/android
-        run: chmod +x gradlew
-
-      # ── 12. Build debug APK ─────────────────────────────────────────────
-      - name: Build debug APK
-        working-directory: artifacts/jarvis/android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      # ── 13. Upload APK artifact ─────────────────────────────────────────
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: jarvis-debug-apk
-          path: artifacts/jarvis/android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
-          if-no-files-found: error
-
-      # ── 14. Print download info ─────────────────────────────────────────
-      - name: Build summary
-        run: |
-          echo "## JARVIS APK Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**APK:** \`app-debug.apk\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Download from the **Artifacts** section of this workflow run." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Install on Android device:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "adb install app-debug.apk" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          name: Jarvis-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
