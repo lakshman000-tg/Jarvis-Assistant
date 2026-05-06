@@ -33,11 +33,11 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Web App
-        run: pnpm run build
+      - name: Build Jarvis Web App
+        run: pnpm --filter @workspace/jarvis run build    
 
       - name: Sync Capacitor
-        run: pnpm exec cap sync android
+      run: pnpm exec cap sync android
 
       - name: Build APK
         run: |
